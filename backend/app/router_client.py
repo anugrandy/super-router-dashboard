@@ -360,7 +360,11 @@ class ZteRouter:
             code = eid.group(1) if eid else "?"
             hint = ""
             if msg == "FAIL" and code == "-258":
-                hint = " (_InstID harus DEV.ACL<n>, bukan -1)"
+                # Measured on this firmware: -1 succeeds for the first row and
+                # then fails, and a named-but-unused slot fails with -8. The
+                # router's own Add form posts _InstID=-1, so the rejection is
+                # about the table state, not the value.
+                hint = " (router menolak penambahan rule kedua; tabel ACL mungkin penuh)"
             elif "SessionTimeout" in msg:
                 hint = " (sesi login habis — coba lagi)"
             raise RouterError(f"Router menolak: {msg} [{code}]{hint}")
@@ -371,7 +375,7 @@ class ZteRouter:
         mac: str,
         name: str = "netdash",
         interface: str = "DEV.WIFI.AP6",
-        inst_id: int = -1,
+        inst_id: int | str | None = -1,
     ) -> str:
         """Add a MAC to the router's access-control blacklist.
 
@@ -385,7 +389,13 @@ class ZteRouter:
         mac = normalize_mac(mac)
         self.ensure_login()
 
-        target_id = inst_id or self._next_free_acl_id()
+        # The ACL table is positional. -1 means "append a row" and the router
+        # assigns the next DEV.ACL<n>; passing a named but unused slot is
+        # rejected with -8. So -1 is the correct value here, and the real id
+        # comes back in the response (or from the verification read below).
+        if inst_id is None:
+            inst_id = -1
+        target_id = inst_id
         tok = self.load_acl_page()
         resp = self._post_macfilter(
             {
@@ -402,19 +412,34 @@ class ZteRouter:
         new_id = parse_new_inst_id(resp.text) or target_id
         # The router can answer SUCC without having written anything, so the
         # only trustworthy confirmation is that the rule shows up in the list.
-        if not any(r.mac == mac for r in self.list_rules()):
+        # It must be on the interface we asked for: a multi-interface kick puts
+        # several rules on the same MAC, so matching on MAC alone would accept a
+        # rule that landed on the wrong AP.
+        landed = [r for r in self.list_rules() if r.mac == mac]
+        if not landed:
             raise RouterError(
                 f"Router melaporkan SUCC tapi rule untuk {mac} tidak muncul "
                 "di daftar Access Control."
+            )
+        if not any(r.interface == interface for r in landed):
+            got = landed[-1].interface or "?"
+            try:
+                self.unblock(mac, new_id)
+            except Exception:  # noqa: BLE001
+                pass
+            raise RouterError(
+                f"Rule untuk {mac} masuk ke {got}, bukan {interface}. "
+                "Blokir tidak akan berlaku di SSID yang benar."
             )
         log.info("block: %s on %s -> %s", mac, interface, new_id)
         return new_id
 
     def _next_free_acl_id(self) -> str:
-        """Next unused DEV.ACL<n>.
+        """Next unused DEV.ACL<n>. Used for capacity reporting only.
 
-        The F670L rejects _InstID=-1 on Apply with error -258; the instance
-        must be named explicitly. ACL1..ACL10 mirror the web UI's 10 slots.
+        Apply itself always sends -1 (the table is positional and the router
+        assigns the id); naming an unused slot is rejected with -8. ACL1..ACL10
+        mirror the web UI's 10 slots.
         """
         used = {r.inst_id for r in self._rows() if r.inst_id}
         for n in range(1, 11):
@@ -422,6 +447,96 @@ class ZteRouter:
             if cand not in used:
                 return cand
         raise RouterError("Semua 10 slot Access Control router sudah penuh")
+
+    def rules_for(self, mac: str) -> list[Rule]:
+        """Every ACL rule currently holding this MAC, one per AP."""
+        m = normalize_mac(mac)
+        return [r for r in self._rows() if r.mac == m]
+
+    def interfaces_for(self, mac: str) -> list[str]:
+        """Distinct AP interfaces this MAC already has a rule on."""
+        out: list[str] = []
+        for r in self.rules_for(mac):
+            if r.interface and r.interface not in out:
+                out.append(r.interface)
+        return out
+
+    def free_slots(self) -> int:
+        """Remaining ACL entries (the F670L has 10)."""
+        used = {r.inst_id for r in self._rows() if r.inst_id}
+        return sum(1 for n in range(1, 11) if f"DEV.ACL{n}" not in used)
+
+    def block_multi(
+        self,
+        mac: str,
+        interfaces: list[str],
+        name: str = "netdash",
+    ) -> tuple[list[str], list[str], list[str]]:
+        """Create one ACL rule per interface.
+
+        Returns ``(inst_ids, errors, covered_interfaces)``.
+
+        A client that roams between bands keeps one MAC but appears on different
+        APs, and Access Control is per-AP: a rule on AP5 does not stop the device
+        joining AP1. Blocking every interface it has been seen on closes that gap.
+
+        Partial success is normal and is reported rather than hidden - each
+        interface is attempted independently so one full table does not abort
+        the rest.
+        """
+        mac = normalize_mac(mac)
+        self.ensure_login()
+
+        wanted = [i for i in dict.fromkeys(interfaces) if i]
+        created: list[str] = []
+        errors: list[str] = []
+        covered: list[str] = []
+        existing = set(self.interfaces_for(mac))
+
+        for iface in wanted:
+            if iface in existing:
+                # Already covered by a live rule; reuse it rather than burning
+                # one of the router's 10 ACL slots on a duplicate.
+                inst = next(
+                    (r.inst_id for r in self.rules_for(mac) if r.interface == iface),
+                    "",
+                )
+                if inst:
+                    created.append(inst)
+                    covered.append(iface)
+                continue
+            try:
+                created.append(self.block(mac, name=name, interface=iface))
+                covered.append(iface)
+            except RouterError as e:
+                errors.append(f"{iface}: {e}")
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"{iface}: {type(e).__name__}: {e}")
+
+        return created, errors, covered
+
+    def unblock_all(self, mac: str) -> tuple[list[str], list[str]]:
+        """Delete every ACL rule for this MAC. Returns (removed_ids, errors).
+
+        A multi-AP kick leaves several rules on one MAC; stopping the kick has to
+        clear all of them, otherwise the device stays blocked on the APs whose
+        instance id was lost (for example after a backend restart).
+        """
+        mac = normalize_mac(mac)
+        self.ensure_login()
+
+        removed: list[str] = []
+        errors: list[str] = []
+        # Re-read between deletes: the table shifts as rows disappear.
+        for rule in self.rules_for(mac):
+            try:
+                self.unblock(mac, rule.inst_id)
+                removed.append(rule.inst_id)
+            except RouterError as e:
+                errors.append(f"{rule.inst_id or rule.interface}: {e}")
+            except Exception as e:  # noqa: BLE001
+                errors.append(f"{rule.inst_id or rule.interface}: {type(e).__name__}: {e}")
+        return removed, errors
 
     def unblock(self, mac: str, inst_id: str | None = None) -> None:
         """Remove a rule from the blacklist.
@@ -440,7 +555,14 @@ class ZteRouter:
             log.info("unblock: %s tidak ada di blacklist router", mac)
             return
 
-        iface = self._interface_for_inst(mac) or "DEV.WIFI.AP6"
+        # Take the interface from the specific rule being deleted; a MAC can
+        # hold several rules and they are not necessarily on the same AP.
+        iface = ""
+        for r in self._rows():
+            if r.inst_id == resolved:
+                iface = r.interface
+                break
+        iface = iface or self._interface_for_inst(mac) or "DEV.WIFI.AP6"
         tok = self.load_acl_page()
         self._post_macfilter(
             {
@@ -454,9 +576,10 @@ class ZteRouter:
                 "_sessionTOKEN": tok,
             }
         )
-        # The router answers SUCC even when it ignored the delete, so verify.
-        still = any(r.mac == mac for r in self.list_rules())
-        if still:
+        # The router answers SUCC even when it ignored the delete, so verify
+        # that this specific instance is gone. Other rules for the same MAC on
+        # other APs are legitimate (a multi-AP kick) and must not fail here.
+        if any(r.inst_id == resolved for r in self.list_rules()):
             raise RouterError(
                 f"Router melaporkan SUCC tapi rule {resolved} masih ada. "
                 "Hapus manual di 192.168.1.1 -> WLAN Advanced -> Access Control Rule."
@@ -490,6 +613,19 @@ class ZteRouter:
         for r in self._rows():
             if r.mac == normalize_mac(mac):
                 return r.inst_id
+        return ""
+
+    def rule_interface_for(self, mac: str) -> str:
+        """The AP interface an existing ACL rule for this MAC targets.
+
+        Used as read-back verification after block(): the router accepts any
+        valid AP id, so a rule written to the wrong SSID still returns success.
+        Returns '' when no rule exists for the MAC.
+        """
+        m = normalize_mac(mac)
+        for r in self._rows():
+            if r.mac == m:
+                return r.interface
         return ""
 
     def _interface_for_inst(self, mac: str) -> str:

@@ -78,8 +78,10 @@ class ConfigStore:
         """Apply non-secret changes; password/session fields are never settable here."""
         data = self._settings.model_dump()
         for key, value in changes.items():
-            if key in ("password_hash", "session_secret", "password") or value is None:
+            if key in ("password_hash", "session_secret", "password"):
                 continue
+            # An explicit None clears the field. Callers that mean "leave it
+            # alone" omit the key instead of sending null.
             data[key] = value
         self._settings = Settings(**data)
         self._save(self._settings)

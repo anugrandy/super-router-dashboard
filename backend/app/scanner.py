@@ -12,8 +12,19 @@ from typing import Any
 from sqlmodel import select
 
 from .config import config_store
-from .db import Device, DeviceEvent, ScanSample, get_session, init_db, utcnow
+from .db import (
+    Device,
+    DeviceApSeen,
+    DeviceEvent,
+    ScanSample,
+    get_session,
+    init_db,
+    utcnow,
+)
 from .net import arp_scan, guess_device_type, lookup_vendor, normalize_mac, valid_mac
+from .fingerprint import fingerprint, is_confident, is_randomized_mac
+from .topo_client import get_client as get_topo_client
+from .ssid_resolver import get_resolver
 
 log = logging.getLogger("netdash.scanner")
 
@@ -77,13 +88,45 @@ def set_kicked(mac: str, started_at: float | None) -> None:
     _set(mac, started_at)
 
 
+def _record_ap_seen(session, mac: str, interface: str, ssid: str, now) -> None:
+    """Note that this MAC is associated with this AP, first/last seen and a count.
+
+    One row per (mac, interface). The union across rows is what a kick must
+    cover, because a roaming client reappears on a different AP with the same
+    MAC.
+    """
+    if not interface:
+        return
+    row = session.exec(
+        select(DeviceApSeen).where(
+            DeviceApSeen.mac == mac, DeviceApSeen.interface == interface
+        )
+    ).first()
+    if row is None:
+        session.add(
+            DeviceApSeen(
+                mac=mac,
+                interface=interface,
+                ssid_name=ssid,
+                first_seen=now,
+                last_seen=now,
+                times_seen=1,
+            )
+        )
+    else:
+        row.last_seen = now
+        row.times_seen = (row.times_seen or 0) + 1
+        if ssid:
+            row.ssid_name = ssid
+        session.add(row)
+
+
 def device_to_dict(d: Device, kicked: float | None = None) -> dict:
     return {
         "mac": d.mac,
         "ip": d.ip,
         "hostname": d.hostname,
         "vendor": d.vendor,
-        "device_type": d.device_type,
         "nickname": d.nickname,
         "is_gateway": d.is_gateway,
         "online": d.online,
@@ -91,6 +134,32 @@ def device_to_dict(d: Device, kicked: float | None = None) -> dict:
         "last_seen": d.last_seen.isoformat() if d.last_seen else None,
         "last_online": d.last_online.isoformat() if d.last_online else None,
         "is_static": d.is_static,
+        # Effective type: the manual override when set, else the auto guess.
+        "device_type": d.type_override or d.device_type,
+        "guessed_type": d.device_type,
+        "type_override": d.type_override,
+        # Router-reported link info. Rates only - see app/fingerprint.py on
+        # why there is no cumulative byte counter for this firmware.
+        "rx_rate_bps": d.rx_rate_bps,
+        "tx_rate_bps": d.tx_rate_bps,
+        "link_band": d.link_band,
+        # The AP this device is really on, and its SSID name. Access Control
+        # rules must target this interface, not a default.
+        "wifi_interface": d.wifi_interface,
+        "ssid_name": d.ssid_name,
+        # Cumulative bytes from the router (RXBytes/TXBytes), not rates.
+        "rx_bytes": d.rx_bytes,
+        "tx_bytes": d.tx_bytes,
+        "data_total_bytes": d.rx_bytes + d.tx_bytes,
+        "randomized_mac": is_randomized_mac(d.mac),
+        # False when there is no hostname, no vendor and no link-type evidence,
+        # so the UI can ask the user to pick a type instead of implying it knows.
+        "type_confident": is_confident(
+            d.mac,
+            hostname=d.hostname,
+            vendor=d.vendor,
+            gateway=d.is_gateway,
+        ),
         "kicked": kicked,
     }
 
@@ -113,6 +182,39 @@ async def _run_scan(subnet: str, iface: str | None) -> list[dict]:
     )
     gateway_mac = normalize_mac(gateway_mac) if gateway_mac else None
 
+    # Validate a manually pinned gateway. Auto-detection (the host answering
+    # .1) is authoritative; a pinned MAC is a user override and is honoured,
+    # but only when that MAC is actually present in this scan. A stale value
+    # would otherwise put the Gateway badge on an unrelated device.
+    if gateway_mac and gateway_ip:
+        live_macs = {normalize_mac(h.mac) for h in hosts}
+        if gateway_mac not in live_macs:
+            log.warning(
+                "pinned gateway_mac %s not seen in this scan; "
+                "falling back to auto-detection",
+                gateway_mac,
+            )
+            gateway_mac = next(
+                (normalize_mac(h.mac) for h in hosts if h.ip == gateway_ip), None
+            )
+
+    # Router-side client info: DHCP hostnames and link rates. Best-effort -
+    # a router that is down or does not expose the page must not stop a scan.
+    try:
+        topo = get_topo_client().fetch()
+    except Exception as e:  # noqa: BLE001
+        log.info("router client info unavailable: %s", e)
+        topo = {}
+
+    # Per-device AP association + cumulative byte counters, from the router's
+    # WLAN Client Status table. This is the only source that names the exact AP
+    # (DEV.WIFI.APn) a client is on, which Access Control rules require.
+    try:
+        ssid_map = get_resolver().snapshot()
+    except Exception as e:  # noqa: BLE001
+        log.info("router SSID info unavailable: %s", e)
+        ssid_map = {}
+
     with get_session() as s:
         for host in hosts:
             mac = normalize_mac(host.mac)
@@ -122,15 +224,40 @@ async def _run_scan(subnet: str, iface: str | None) -> list[dict]:
             is_gw = gateway_mac is not None and mac == gateway_mac
             dev = s.exec(select(Device).where(Device.mac == mac)).first()
             vendor = lookup_vendor(mac)
+            # Prefer the router's DHCP hostname over the ARP-scan reverse DNS:
+            # the router is authoritative for the name the device advertises.
+            ci = topo.get(mac)
+            router_hostname = ci.hostname if ci else ""
+            # AP association + cumulative usage from wlan_client_stat.
+            sm = ssid_map.get(mac, {})
+            wifi_iface = str(sm.get("interface") or "")
+            ssid_name = str(sm.get("ssid") or "")
+            rx_bytes = int(sm.get("rx_bytes") or 0)
+            tx_bytes = int(sm.get("tx_bytes") or 0)
+            dhcp_hostname = router_hostname or host.hostname
+            is_wireless = ci.is_wireless if ci else None
+            _, guess = fingerprint(
+                mac,
+                hostname=dhcp_hostname,
+                vendor=vendor,
+                ip=host.ip,
+                is_wireless=is_wireless,
+                gateway=is_gw,
+            )
             if dev is None:
                 dev = Device(
                     mac=mac,
                     ip=host.ip,
-                    hostname=host.hostname,
+                    hostname=dhcp_hostname,
                     vendor=vendor,
-                    device_type=guess_device_type(
-                        vendor, host.hostname, host.ip, is_gw
-                    ),
+                    device_type=guess,
+                    rx_rate_bps=ci.rx_rate_bps if ci else 0,
+                    tx_rate_bps=ci.tx_rate_bps if ci else 0,
+                    link_band=ci.band if ci else "",
+                    wifi_interface=wifi_iface,
+                    ssid_name=ssid_name,
+                    rx_bytes=rx_bytes,
+                    tx_bytes=tx_bytes,
                     is_gateway=is_gw,
                     first_seen=now,
                     last_seen=now,
@@ -138,6 +265,7 @@ async def _run_scan(subnet: str, iface: str | None) -> list[dict]:
                     online=True,
                 )
                 s.add(dev)
+                _record_ap_seen(s, mac, wifi_iface, ssid_name, now)
                 s.add(DeviceEvent(mac=mac, kind="online", at=now, ip=host.ip))
                 changes.append({"mac": mac, "kind": "new"})
             else:
@@ -145,18 +273,45 @@ async def _run_scan(subnet: str, iface: str | None) -> list[dict]:
                 gw_changed = is_gw != dev.is_gateway
                 if host.ip:
                     dev.ip = host.ip
-                if host.hostname:
-                    dev.hostname = host.hostname
+                if dhcp_hostname and dhcp_hostname != dev.hostname:
+                    dev.hostname = dhcp_hostname
                 if vendor and not dev.vendor:
                     dev.vendor = vendor
+                if ci is not None:
+                    dev.rx_rate_bps = ci.rx_rate_bps
+                    dev.tx_rate_bps = ci.tx_rate_bps
+                    dev.link_band = ci.band
+                if wifi_iface:
+                    dev.wifi_interface = wifi_iface
+                if ssid_name:
+                    dev.ssid_name = ssid_name
+                if rx_bytes:
+                    dev.rx_bytes = rx_bytes
+                if tx_bytes:
+                    dev.tx_bytes = tx_bytes
                 dev.is_gateway = is_gw
-                # Re-type when the device was unclassified, or when its
-                # gateway status changed. Manual nicknames are untouched.
-                if dev.device_type == "unknown" or gw_changed:
-                    dev.device_type = guess_device_type(
-                        dev.vendor, dev.hostname, dev.ip, is_gw
-                    )
+                # Re-type when the stored value might have come from an older,
+                # weaker rule, or when gateway status changed. "router" is
+                # included on purpose: clients behind a ZTE access point were
+                # previously stored as router and would never be re-examined.
+                # A manual type_override always wins.
+                if (
+                    not dev.type_override
+                    and dev.device_type in ("unknown", "other", "router", "")
+                ) or gw_changed:
+                    dev.device_type = fingerprint(
+                        mac,
+                        hostname=dev.hostname,
+                        vendor=dev.vendor,
+                        ip=dev.ip,
+                        is_wireless=is_wireless,
+                        gateway=is_gw,
+                    )[1]
                 dev.last_seen = now
+                # Record every AP this MAC has ever been seen on. A kick has to
+                # cover all of them, not just the current one, or the device can
+                # simply rejoin on the other band.
+                _record_ap_seen(s, mac, wifi_iface, ssid_name, now)
                 if not was_online:
                     dev.online = True
                     dev.last_online = now

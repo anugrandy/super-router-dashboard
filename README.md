@@ -1,4 +1,4 @@
-# netdash — Network Dashboard & Device Manager
+# AN Telemetry — Network Dashboard & Device Manager
 
 Dashboard jaringan rumah + device manager. Menjalur di laptop sendiri (localhost),
 untuk memonitor dan mengelola perangkat di jaringan WiFi/LAN **milik Anda sendiri**.
@@ -83,7 +83,7 @@ tetap same-origin.
 |---|---|
 | URL | <http://localhost:5173> |
 | Username | `admin` |
-| Password | `netdash` |
+| Password | `netdash` (default, ganti lewat Settings) |
 
 Ganti password di **Settings**, atau set env sebelum pertama jalan:
 
@@ -258,6 +258,192 @@ wrong password.
 
 ---
 
+## Menentukan SSID device (untuk Access Control)
+
+Access Control di F670L bersifat **per-AP**, jadi rule harus diarahkan ke AP
+yang benar. Kalau salah, router tetap menerima rule dan melaporkan sukses —
+blokir jadi tidak berlaku tanpa error. Ini bug yang pernah ada: semua device
+dikirim ke `default_wifi_interface` (AP6).
+
+Sumber data, dari yang sudah diverifikasi langsung:
+
+| Endpoint | Isi | Bisa tentukan SSID? |
+|---|---|---|
+| `topo_lua.lua` (Topology) | `AccessType` = 0 LAN / 1 2.4GHz / 2 5GHz | **Tidak** |
+| DHCP (`landhcp*`) | hostname, IP, MAC, port | **Tidak** |
+| `wlan_client_stat_lua.lua` | `AliasName` = AP per client, `ESSID`, `RXBytes`/`TXBytes` | **Ya** |
+
+`topo_lua.lua` hanya memberi **band**, dan itu tidak cukup: pada router ini
+**SSID5 dan SSID6 sama-sama 5 GHz** (keduanya `DEV.WIFI.RD2`), jadi tebakan
+berdasarkan band salah ~50% waktu.
+
+Sumber yang benar adalah **Local Network → Status → WLAN Client Status**
+(`wlan_client_stat_lua.lua`), yang punya `AliasName` per client:
+
+```
+76:09:9E:D7:88:FD  TECNO-SPARK-Go-1  DEV.WIFI.AP5  AgraSec
+C2:4A:22:70:1C:C8  OPPO-A16          DEV.WIFI.AP5  AgraSec
+26:E3:D2:DE:86:84  A52-milik-Nur     DEV.WIFI.AP5  AgraSec
+04:6C:59:7D:73:14  UNKNOWN-PC        DEV.WIFI.AP6  FAIZ
+0E:39:4D:84:01:9C  Galaxy-A12        DEV.WIFI.AP1  FAIZ
+```
+
+Nama SSID asli (`FAIZ`, `AgraSec`) diambil dari
+`wlan_macfilteraclpolicy_lua.lua`, yang juga memberi daftar AP dengan
+`ACLPolicy` bukan `Disabled` - itu daftar AP yang bisa dipakai untuk block.
+
+Perilaku `app/ssid_resolver.py`:
+
+- `interface_for(mac)` mengembalikan AP yang sesuai, atau `''` kalau device
+  tidak terdaftar sebagai client WLAN (mis. kabel).
+- Tidak ada tebakan diam-diam. Kalau tidak ditemukan, kick **gagal dengan
+  pesan jelas**, bukan menulis rule ke AP default.
+- Setelah `block()`, rule dibaca balik dari router. Kalau interface yang
+  tersimpan berbeda dari yang dimaksud, rule dibatalkan dan kick dilaporkan
+  gagal — supaya "berhasil" tidak pernah berarti blokir tidak berlaku.
+- Override manual per-MAC tersedia di Device Detail (dropdown "AP untuk blokir").
+
+## Data pemakaian per device — tersedia
+
+Ternyata router **ada** penghitung byte kumulatif per klien, di field tersembunyi
+`RXBytes`/`TXBytes` pada halaman WLAN Client Status. Ini melengkapi kesimpulan
+sebelumnya yang menyatakan tidak tersedia — DHCP dan Topology memang tidak
+punya, tapi tabel ini punya.
+
+Nilainya kumulatif sejak router boot (reset saat reboot), bukan data historis
+per hari. Device Detail menampilkan total GB + SSID-nya.
+
+## Performa
+
+Pengukuran di jaringan test (10 perangkat):
+
+| Metrik | Nilai |
+|---|---|
+| `/api/devices` | 28 ms |
+| `/api/settings` | 41 ms |
+| `/api/dashboard` | 55 ms |
+| `/api/devices` saat scan jalan | maks 361 ms (tidak blocking) |
+| Scan interval | 15 s (background, bukan blocking request) |
+
+Tiga penyebab lag yang ditemukan, semuanya di frontend:
+
+1. **Timer 1 Hz di shared context.** `tick` ada di `LiveState`, jadi setiap
+   detik seluruh komponen `useLive()` render ulang — termasuk semua baris tabel
+   device — walau tidak ada device yang sedang di-kick. Diukur **11 mutasi DOM
+   per detik** pada halaman yang idle. Tick sekarang/context terpisah
+   (`ClockCtx`) dan **berhenti total** saat tidak ada kick aktif, jadi hanya
+   badge countdown yang render per detik.
+
+2. **Identitas array devices berubah tiap tick.** `Date.now()` dipanggil di
+   dalam `useMemo`, membuat array baru tiap detik. Sekarang `kicked`
+   menyimpan epoch (stabil) dan `elapsedOf()` menghitung elapsed di badge.
+
+3. **Paint mahal saat scroll.** `body::before` memakai `position: fixed` full
+   viewport (repaint tiap frame scroll) dan tiap `.card` punya box-shadow
+   dua-lapis. Sekarang `position: absolute` dan shadow satu lapis.
+
+Baris tabel juga dibungkus `memo()` dengan key `mac` yang stabil, jadi scan
+yang mengubah satu device tidak me-render ulang seluruh tabel.
+
+Backend sudah baik dan tidak diubah: query ter-index, semua query history
+pakai `LIMIT`, dan scan berjalan di background (`asyncio.to_thread`) tanpa
+menge-block request API.
+
+## Typography
+
+Font: **Plus Jakarta Sans** (Google Fonts, `display=swap`) dengan fallback
+sistem. Base font 15px, heading 700–800, angka statistik 2.75rem/800 dengan
+`tabular-nums` supaya tidak bergeser saat digit berubah.
+
+## Device fingerprinting
+
+Hostname diambil dari halaman **Topology** router (panel "Access Devices
+Information"), endpoint `/?_type=menuData&_tag=topo_lua.lua`. Ini satu-satunya
+sumber nama DHCP di firmware ini; `accessdev_homepage_lua.lua` ternyata berisi
+status WAN, bukan daftar lease.
+
+Tipe device ditebak dari kombinasi hostname + vendor OUI (`app/fingerprint.py`):
+
+| Urutan | Dasar | Hasil |
+|---|---|---|
+| 1 | Gateway | Router |
+| 2 | `iPhone` / `iPad` / `MacBook` di hostname | Phone / Laptop |
+| 2b | Vendor jaringan (ZTE, TP-Link, ...) **dan** hostname kosong | Router |
+| 3 | `linux`, `ubuntu`, `raspberrypi`, atau vendor Raspberry Pi | Server |
+| 4–5 | Vendor printer / TV | Printer / TV |
+| 6 | Merek HP (Samsung, Xiaomi, OPPO, Tecno, Itel, ...) atau kode model | Phone |
+| 7–8 | `desktop`, `laptop`, `cam`, `printer`, `tv` | Laptop / IoT |
+| 9–10 | Vendor NIC + kabel, atau wired tanpa bukti lain | PC / Server |
+
+**Kenapa vendor sering kosong:** iOS dan Android 10+ memakai *private MAC* per
+SSID. Bit U/L di byte pertama MAC tersebut menyala, jadi prefix-nya acak dan
+tidak ada di registry IEEE sama sekali. Ini perilaku yang benar, bukan lookup
+yang gagal — field `randomized_mac` menandainya di API.
+
+Hostname menang atas vendor: di jaringan ini AP-nya ZTE, dan beberapa ponsel
+mewarisi prefix yang sama, sehingga pencocokan vendor-saja akan salah menandai
+ponsel sebagai router.
+
+Override manual tersimpan di `Device.type_override` dan menang atas tebakan.
+Kirim `PATCH /api/devices/{mac}` dengan `{"type_override": "server"}`, atau `""`
+untuk kembali ke deteksi otomatis.
+
+## Device Apple dengan MAC acak — tidak bisa dideteksi otomatis
+
+Diverifikasi langsung di jaringan ini untuk device `16:50:AD:B9:4A:FA`:
+
+| Sumber | Hasil |
+|---|---|
+| OUI `16:50:AD` | tidak ada di registry IEEE |
+| Bit U/L byte pertama | **menyala** → MAC private/random |
+| Hostname dari router (`topo_lua.lua`) | kosong |
+| Hostname dari `Action=Offline` | router juga tidak punya nama |
+| Reverse DNS (`gethostbyaddr`) | `herror` |
+| mDNS (224.0.0.251:5353) | tidak ada respons |
+| Field vendor/OUI di payload topo | **tidak ada sama sekali** |
+
+Jadi untuk device seperti ini **tidak ada sumber data yang bisa memastikan itu
+Apple**. Nama "Apple device"-nya ada di DHCP request, tapi router ZTE F670L
+tidak menyimpannya, dan iOS tidak memCAST nama modelnya lewat mDNS ke LAN
+(iOS pada umumnya tidak mengirim respons mDNS ke LAN).
+
+Kalau iOS kamu menyala "Private Wi-Fi Address" dengan mode **Rotating**,
+nama DHCP juga ikut berubah tiap beberapa hari. Mode **Off** akan mengembalikan
+nama device aslinya (mis. `iPhone-Ade`) dan netdash langsung bisa
+mengenali-nya lewat hostname.
+
+Yang dilakukan aplikasi:
+
+- Ditambah `type_confident: false` di API. Device tanpa hostname + MAC acak
+  ditandai amber **"perlu dicek"** di kolom Tipe, bukan ditampilkan seolah
+  diklasifikasi dengan yakin.
+- Panel Device Detail menampilkan penjelasan kenapa tidak bisa dipastikan, dan
+ dropdown tipe tersedia untuk memilih manual. Pilihan manual tersimpan dan
+  menang atas tebakan.
+- Deteksi Apple via hostname diperluas: `iPhone/iPad/iPod`, `MacBook*`,
+  `iMac`, `mac-mini-*`, pola `<Model>-<Name>.local`, serta `Apple TV` → tipe
+  TV. Ini menutup kasus di mana hostname ada tapi formatnya bukan kata
+  "iPhone"/"iPad" polos.
+
+Kalau device Apple kamu muncul sebagai "perlu dicek", isi manual sekali di
+Device Detail — itu satu-satunya cara di firmware ini.
+
+## Bandwidth per device — tidak tersedia
+
+Router ZTE F670L **tidak** punya penghitung byte kumulatif per klien. Panel
+adminnya hanya mengekspos laju sesaat per perangkat:
+
+```
+RxRateBps   TxRateBps      # bits/detik, sesaat
+```
+
+Selector "Real-time upstream / Real-time downstream" yang terlihat di Topology
+adalah laju link, bukan akumulasi. Karena laptop ini bukan gateway, netdash
+juga tidak bisa menghitung trafik device lain dari jaringan.
+
+Yang ditampilkan di Device Detail karena itu: **laju saat ini** (RX/TX), plus
+disclaimer eksplisit. Tidak ada angka GB yang dikarang.
+
 ## Troubleshooting: kick tidak berfungsi
 
 Kalau device yang di-kick **tidak kehilangan koneksi**, cek berurutan ini.
@@ -291,7 +477,7 @@ tidak sampai ke jaringan, dan scapy mencetak:
 WARNING: MAC address to reach destination not found. Using broadcast.
 ```
 
-netdash tidak memakai `conf.iface`. Semua pengiriman ARP dipin ke adapter
+Aplikasi ini tidak memakai `conf.iface`. Semua pengiriman ARP dipin ke adapter
 yang memegang IP lokal kamu (resolved via `resolve_iface()` di
 `backend/app/scapy_arp.py`), dan dikirim dengan `sendp()` — bukan `send()`,
 karena `send()` menolak `iface=` untuk paket link-layer lalu kembali ke
@@ -317,7 +503,7 @@ Test-Path C:\Windows\System32\wpcap.dll          # harus True
 ```
 
 Kalau `wpcap.dll` tidak ada, install ulang Npcap dengan WinPcap API-compatible
-Mode aktif, lalu **install ulang netdash** (`pip install -r
+Mode aktif, lalu **install ulang aplikasi** (`pip install -r
 backend/requirements.txt`) agar scapy memuat DLL yang benar.
 
 ### 4. Kalau semua sudah benar tapi target tetap online

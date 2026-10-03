@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import DeviceTable from '../components/DeviceTable'
-import { ScanButton } from '../components/Layout'
+import { PageHeader, ScanButton } from '../components/Layout'
 import { useLive } from '../live'
 
 export default function Devices() {
@@ -20,19 +20,21 @@ export default function Devices() {
   }, [connected])
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">Devices</h1>
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-slate-500">
+    <div>
+      <PageHeader
+        title="Devices"
+        subtitle={
+          <>
+            {devices.length} perangkat terdaftar
+            <span className="mx-2 text-[#3f4857]">|</span>
             {connected ? 'live' : 'mode polling'}
-          </span>
-          <ScanButton />
-        </div>
-      </div>
+          </>
+        }
+        actions={<ScanButton />}
+      />
 
       {err && (
-        <div className="card px-4 py-3 border-rose-500/40 bg-rose-500/10 text-sm text-rose-200">
+        <div className="card px-4 py-3 border-rose-500/35 bg-rose-500/[0.07] text-sm text-[#f295aa] mb-4">
           {err}
         </div>
       )}

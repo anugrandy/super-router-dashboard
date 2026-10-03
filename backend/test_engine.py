@@ -3,6 +3,11 @@
 Run: .venv/Scripts/python.exe backend/test_engine.py
 """
 import asyncio
+import os
+
+# Backend port under test. Defaults to 8777, matching the original hardcoded
+# value; override with NETDASH_BACKEND/ NETDASH_PORT when running elsewhere.
+PORT = os.environ.get("NETDASH_BACKEND") or os.environ.get("NETDASH_PORT") or "8777"
 import json
 import os
 import sys
@@ -152,7 +157,7 @@ async def ws_check():
     jar = http.cookiejar.CookieJar()
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
     req = urllib.request.Request(
-        "http://127.0.0.1:8777/api/auth/login",
+        f"http://127.0.0.1:{PORT}/api/auth/login",
         data=json.dumps({"username": "admin", "password": "netdash"}).encode(),
         headers={"Content-Type": "application/json"},
     )
@@ -169,7 +174,7 @@ async def ws_check():
     # 1. anonymous must be rejected
     rejected = False
     try:
-        async with websockets.connect("ws://127.0.0.1:8777/ws/live") as ws:
+        async with websockets.connect(f"ws://127.0.0.1:{PORT}/ws/live") as ws:
             await asyncio.wait_for(ws.recv(), timeout=3)
     except Exception:
         rejected = True
@@ -177,7 +182,7 @@ async def ws_check():
 
     # 2. authenticated gets a devices snapshot then a kicked map
     hdrs = [("Cookie", f"netdash_session={cookie.value}")]
-    async with websockets.connect("ws://127.0.0.1:8777/ws/live", additional_headers=hdrs) as ws:
+    async with websockets.connect(f"ws://127.0.0.1:{PORT}/ws/live", additional_headers=hdrs) as ws:
         first = json.loads(await asyncio.wait_for(ws.recv(), timeout=5))
         chk("ws sends devices first", first.get("event") == "devices", str(first)[:100])
         second = json.loads(await asyncio.wait_for(ws.recv(), timeout=5))

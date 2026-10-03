@@ -33,6 +33,41 @@ class Device(SQLModel, table=True):
     last_online: datetime | None = None
     online: bool = False
     is_static: bool = False
+    # Set by the user from the device page. When non-empty it wins over the
+    # automatic guess, so a misclassification can be corrected permanently.
+    type_override: str = ""
+    # Router-reported: hostnames and instantaneous link rates. No cumulative
+    # byte counter exists on this firmware, so usage totals are not stored.
+    rx_rate_bps: int = 0
+    tx_rate_bps: int = 0
+    link_band: str = ""
+    # From wlan_client_stat: the exact AP this device is associated with and
+    # its SSID name. Used to target Access Control rules at the right AP.
+    wifi_interface: str = ""
+    ssid_name: str = ""
+    # Cumulative counters - unlike rx/tx_rate_bps these are totals, not rates.
+    rx_bytes: int = 0
+    tx_bytes: int = 0
+
+
+class DeviceApSeen(SQLModel, table=True):
+    """History of which APs a device has been associated with.
+
+    A client that roams between bands keeps one MAC but shows up on different
+    ``DEV.WIFI.APn`` interfaces. Access Control is per-AP, so blocking only the
+    interface the device happens to be on right now leaves it able to reconnect
+    on another. Every interface in this table is a candidate target.
+    """
+
+    __tablename__ = "device_ap_seen"
+
+    id: int | None = Field(default=None, primary_key=True)
+    mac: str = Field(index=True)
+    interface: str = Field(index=True)
+    ssid_name: str = ""
+    first_seen: datetime = Field(default_factory=utcnow)
+    last_seen: datetime = Field(default_factory=utcnow)
+    times_seen: int = 1
 
 
 class DeviceEvent(SQLModel, table=True):
@@ -64,6 +99,10 @@ class KickLog(SQLModel, table=True):
     # Router-assigned rule id from the Apply response (e.g. "DEV.ACL2").
     # Required to delete the rule later; survives a backend restart.
     router_inst_id: str = ""
+    # Every ACL instance created for one kick. A kick can span several APs, so a
+    # single inst_id is not enough to clean up afterwards. Comma-separated to
+    # keep the migration simple: e.g. "DEV.ACL1,DEV.ACL3".
+    router_inst_ids: str = ""
     # Which half of the combined kick actually landed.
     router_blocked: bool = False
     arp_active: bool = False
@@ -91,6 +130,7 @@ MIGRATIONS: dict[str, dict[str, str]] = {
     "kick_logs": {
         "mode": "TEXT NOT NULL DEFAULT 'router'",
         "router_inst_id": "TEXT NOT NULL DEFAULT ''",
+        "router_inst_ids": "TEXT NOT NULL DEFAULT ''",
         "router_blocked": "BOOLEAN NOT NULL DEFAULT 0",
         "arp_active": "BOOLEAN NOT NULL DEFAULT 0",
         "wifi_interface": "TEXT NOT NULL DEFAULT ''",
@@ -98,6 +138,14 @@ MIGRATIONS: dict[str, dict[str, str]] = {
     },
     "devices": {
         "is_static": "BOOLEAN NOT NULL DEFAULT 0",
+        "type_override": "TEXT NOT NULL DEFAULT ''",
+        "rx_rate_bps": "INTEGER NOT NULL DEFAULT 0",
+        "tx_rate_bps": "INTEGER NOT NULL DEFAULT 0",
+        "link_band": "TEXT NOT NULL DEFAULT ''",
+        "wifi_interface": "TEXT NOT NULL DEFAULT ''",
+        "ssid_name": "TEXT NOT NULL DEFAULT ''",
+        "rx_bytes": "INTEGER NOT NULL DEFAULT 0",
+        "tx_bytes": "INTEGER NOT NULL DEFAULT 0",
     },
 }
 

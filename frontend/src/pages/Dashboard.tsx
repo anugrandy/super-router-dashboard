@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Area,
@@ -17,7 +17,8 @@ import {
   fmtTime,
   type Dashboard,
 } from '../api'
-import { ScanButton } from '../components/Layout'
+import { PageHeader, ScanButton } from '../components/Layout'
+import { DeviceTypeChip, STAT_ICON, STAT_TINT } from '../components/icons'
 import { useLive } from '../live'
 
 export default function DashboardPage() {
@@ -50,72 +51,153 @@ export default function DashboardPage() {
 
   const types = Object.entries(data?.by_type ?? {}).sort((a, b) => b[1] - a[1])
 
+  // Trend for the stat cards: compare the first and last sample in the window
+  // the chart already shows, so the badge can never disagree with the graph.
+  // Comparing only the last two samples hides the trend whenever the count is
+  // momentarily flat, which is most of the time on a quiet network.
+  const firstOnline = chart[0]?.online ?? 0
+  const lastOnline = chart[chart.length - 1]?.online ?? 0
+  const onlineTrend =
+    firstOnline === 0 ? (lastOnline > 0 ? 100 : 0) : ((lastOnline - firstOnline) / firstOnline) * 100
+  // Offline is "good news when it goes down", so its arrow flips direction.
+  const offlineNow = Math.max(0, total - online)
+  const spanLabel =
+    chart.length > 1
+      ? `${Math.round((new Date(chart[chart.length - 1].at).getTime() - new Date(chart[0].at).getTime()) / 60000)} menit`
+      : 'belum ada data cukup' 
+
   return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">Dashboard</h1>
-        <span className="mono text-xs text-slate-500">{data?.gateway.subnet ?? '—'}</span>
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-slate-500">
-            {connected ? 'update realtime' : 'menunggu koneksi'}
-          </span>
-          <ScanButton />
-        </div>
-      </div>
+    <div>
+      <PageHeader
+        title="Dashboard"
+        subtitle={
+          <>
+            {data?.gateway.subnet ?? '—'}
+            <span className="mx-2 text-[#4a5265]">|</span>
+            {connected ? 'update realtime aktif' : 'menunggu koneksi live'}
+          </>
+        }
+        actions={<ScanButton />}
+      />
 
       {err && (
-        <div className="card px-4 py-3 border-rose-500/40 bg-rose-500/10 text-sm text-rose-200">
+        <div className="card px-4 py-3 border-rose-500/35 bg-rose-500/[0.07] text-sm text-[#f295aa] mb-5">
           {err}
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Online" value={online} tone="ok" />
-        <Stat label="Offline" value={Math.max(0, total - online)} tone="muted" />
-        <Stat label="Total device" value={total} tone="default" />
-        <Stat label="Sedang di-kick" value={kickedCount} tone={kickedCount ? 'danger' : 'muted'} />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-5">
+        <Stat
+          label="Total Device"
+          value={total}
+          note="terdaftar di jaringan"
+          icon={<StatIcon kind="total" />}
+        />
+        <Stat
+          label="Online Sekarang"
+          value={online}
+          note="terhubung saat ini"
+          trend={onlineTrend}
+          spanLabel={spanLabel}
+          icon={<StatIcon kind="online" />}
+        />
+        <Stat
+          label="Offline"
+          value={offlineNow}
+          note="tidak merespons"
+          trend={-onlineTrend}
+          spanLabel={spanLabel}
+          invertTone
+          icon={<StatIcon kind="offline" />}
+        />
+        <Stat
+          label="Sedang Di-kick"
+          value={kickedCount}
+          note={kickedCount ? 'blokir router aktif' : 'tidak ada blokir aktif'}
+          tone={kickedCount ? 'danger' : 'muted'}
+          icon={<StatIcon kind="kick" />}
+        />
       </div>
 
-      <div className="card p-5">
-        <h2 className="text-sm font-semibold mb-1">Perangkat online</h2>
-        <p className="text-xs text-slate-500 mb-4">
-          Tendensi jumlah device online dari hasil scan terakhir
-        </p>
-        <div className="h-56">
+      <div className="card p-5 mb-5">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <h2 className="card-title">Perangkat Online</h2>
+            <p className="card-sub mt-0.5">
+              Tendensi jumlah device online dari hasil scan terakhir
+            </p>
+          </div>
+          <div className="flex items-center gap-3 text-[11px] text-[#7c8798]">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-accent-500" />
+              Online
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#a78bfa]" />
+              Total device
+            </span>
+          </div>
+        </div>
+        <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chart} margin={{ top: 4, right: 8, bottom: 0, left: -22 }}>
+            <AreaChart data={chart} margin={{ top: 6, right: 10, bottom: 0, left: -24 }}>
               <defs>
+                {/* Gradient fill under the line: accent at the top fading to
+                    fully transparent at the baseline. */}
                 <linearGradient id="gOnline" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.45} />
-                  <stop offset="100%" stopColor="#38bdf8" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#5b7cf0" stopOpacity={0.4} />
+                  <stop offset="60%" stopColor="#5b7cf0" stopOpacity={0.12} />
+                  <stop offset="100%" stopColor="#5b7cf0" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gTotal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#a78bfa" stopOpacity={0.18} />
+                  <stop offset="100%" stopColor="#a78bfa" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="#1d2433" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="at"
-                stroke="#64748b"
-                tick={{ fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
                 tickFormatter={(v: string) =>
-                  new Date(v).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+                  new Date(v).toLocaleTimeString('id-ID', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
                 }
                 minTickGap={40}
               />
-              <YAxis stroke="#64748b" tick={{ fontSize: 11 }} allowDecimals={false} width={40} />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                allowDecimals={false}
+                width={44}
+              />
               <Tooltip
+                cursor={{ stroke: 'rgba(255,255,255,0.14)', strokeWidth: 1 }}
+                labelFormatter={(v) => fmtTime(String(v))}
                 contentStyle={{
-                  background: '#151a27',
-                  border: '1px solid #2a3346',
-                  borderRadius: 8,
+                  background: '#161b27',
+                  border: '1px solid #2e374a',
+                  borderRadius: 12,
                   fontSize: 12,
                 }}
-                labelFormatter={(v) => fmtTime(String(v))}
+              />
+              <Area
+                type="monotone"
+                dataKey="total"
+                stroke="#a78bfa"
+                strokeWidth={1.5}
+                strokeDasharray="4 4"
+                fill="url(#gTotal)"
               />
               <Area
                 type="monotone"
                 dataKey="online"
-                stroke="#38bdf8"
-                strokeWidth={2}
+                stroke="#5b7cf0"
+                strokeWidth={2.2}
                 fill="url(#gOnline)"
+                activeDot={{ r: 4, fill: '#5b7cf0', stroke: '#0b0f18', strokeWidth: 2 }}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -124,60 +206,72 @@ export default function DashboardPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="card p-5">
-          <h2 className="text-sm font-semibold mb-4">Device terbaru</h2>
+          <h2 className="card-title mb-4">Device terbaru</h2>
           {data?.recent?.length ? (
-            <ul className="space-y-2.5 text-sm">
+            <ul className="space-y-1">
               {data.recent.map((d) => (
-                <li key={d.mac} className="flex items-center justify-between gap-2">
+                <li key={d.mac}>
                   <Link
                     to={`/devices/${encodeURIComponent(d.mac)}`}
-                    className="hover:text-sky-300 truncate"
+                    className="flex items-center gap-3 rounded-[10px] px-2 py-2 -mx-2 hover:bg-base-800/70 transition"
                   >
-                    {displayName(d)}
+                    <DeviceTypeChip type={d.device_type} />
+                    <span className="flex-1 min-w-0 truncate text-sm text-[#dbe1ec] hover:text-[#9db4f7]">
+                      {displayName(d)}
+                    </span>
+                    <span
+                      className={`badge ${d.kicked != null ? 'badge-kicked' : d.online ? 'badge-online' : 'badge-offline'}`}
+                    >
+                      {d.kicked != null ? 'di-kick' : d.online ? 'online' : 'offline'}
+                    </span>
                   </Link>
-                  <span
-                    className={`badge ${d.kicked != null ? 'badge-kicked' : d.online ? 'badge-online' : 'badge-offline'}`}
-                  >
-                    {d.kicked != null ? 'di-kick' : d.online ? 'online' : 'offline'}
-                  </span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-slate-500">Belum ada data.</p>
+            <p className="text-xs text-[#7c8798]">Belum ada data.</p>
           )}
         </div>
 
         <div className="card p-5">
-          <h2 className="text-sm font-semibold mb-4">Komposisi tipe</h2>
+          <h2 className="card-title mb-4">Komposisi tipe</h2>
           {types.length ? (
-            <ul className="space-y-2 text-sm">
+            <ul className="space-y-1">
               {types.map(([type, n]) => (
-                <li key={type} className="flex items-center justify-between">
-                  <span className="text-slate-300">{TYPE_LABEL[type] || type}</span>
-                  <span className="mono text-slate-400">{n}</span>
+                <li
+                  key={type}
+                  className="flex items-center gap-3 rounded-[10px] px-2 py-2 -mx-2 hover:bg-base-800/70 transition"
+                >
+                  <DeviceTypeChip type={type} />
+                  <span className="flex-1 text-sm text-[#b6bfcd]">
+                    {TYPE_LABEL[type] || type}
+                  </span>
+                  <span className="mono text-[#7c8798]">{n}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-slate-500">Belum ada device online.</p>
+            <p className="text-xs text-[#7c8798]">Belum ada device online.</p>
           )}
         </div>
 
         <div className="card p-5">
-          <h2 className="text-sm font-semibold mb-4">Log kick terakhir</h2>
+          <h2 className="card-title mb-4">Log kick terakhir</h2>
           {data?.kick_log?.length ? (
-            <ul className="space-y-2.5 text-xs">
+            <ul className="space-y-1">
               {data.kick_log.slice(0, 8).map((k) => (
-                <li key={k.id} className="flex items-start justify-between gap-2">
-                  <span className="text-slate-400">
+                <li
+                  key={k.id}
+                  className="flex items-start justify-between gap-2 rounded-[10px] px-2 py-2 -mx-2 hover:bg-base-800/70 transition"
+                >
+                  <span className="text-[#7c8798]">
                     <Link
                       to={`/devices/${encodeURIComponent(k.mac)}`}
-                      className="mono hover:text-sky-300"
+                      className="mono hover:text-[#9db4f7]"
                     >
                       {k.mac}
                     </Link>
-                    <div className="text-slate-500">
+                    <div className="text-[11px] text-[#5d6675]">
                       {fmtTime(k.at)} · {k.actor || '-'}
                     </div>
                   </span>
@@ -188,7 +282,7 @@ export default function DashboardPage() {
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-slate-500">Belum ada aksi kick.</p>
+            <p className="text-xs text-[#7c8798]">Belum ada aksi kick.</p>
           )}
         </div>
       </div>
@@ -196,27 +290,107 @@ export default function DashboardPage() {
   )
 }
 
+/** Stat-card icon: one lucide glyph per metric, tinted so it reads against
+ *  the card surface without competing with the number. */
+function StatIcon({ kind }: { kind: 'total' | 'online' | 'offline' | 'kick' }) {
+  const Ico = STAT_ICON[kind]
+  const tint = STAT_TINT[kind]
+  return (
+    <span
+      className="inline-flex items-center justify-center w-9 h-9 rounded-[11px] shrink-0"
+      style={{ background: tint.bg, color: tint.fg }}
+      aria-hidden="true"
+    >
+      <Ico size={18} />
+    </span>
+  )
+}
+
+/** Small arrow for the trend pill. Not a device icon, so it stays inline. */
+function TrendArrow({ dir }: { dir: 'up' | 'down' }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      width={12}
+      height={12}
+      className="shrink-0"
+      aria-hidden="true"
+    >
+      {dir === 'up' ? (
+        <path d="M12 19V5M5 12l7-7 7 7" />
+      ) : (
+        <path d="M12 5v14M5 12l7 7 7-7" />
+      )}
+    </svg>
+  )
+}
+
+/** Stat card: big number, optional trend pill, soft icon chip, muted caption. */
 function Stat({
   label,
   value,
-  tone,
+  note,
+  trend,
+  spanLabel,
+  invertTone,
+  tone = 'default',
+  icon,
 }: {
   label: string
   value: number
-  tone: 'ok' | 'danger' | 'muted' | 'default'
+  note?: string
+  trend?: number
+  spanLabel?: string
+  /** Set when a rising number is bad news (e.g. Offline). Flips the pill tone
+   *  so green always means "better", never just "up". */
+  invertTone?: boolean
+  tone?: 'default' | 'muted' | 'danger'
+  icon?: ReactNode
 }) {
-  const color =
-    tone === 'ok'
-      ? 'text-emerald-300'
-      : tone === 'danger'
-        ? 'text-rose-300'
-        : tone === 'muted'
-          ? 'text-slate-400'
-          : 'text-slate-100'
+  // Shown whenever a comparison window exists: "0%" is itself information.
+  const showTrend = trend != null && Number.isFinite(trend)
+  const rising = (trend ?? 0) >= 0
+  const up = invertTone ? !rising : rising
+  const flat = Math.abs(trend ?? 0) < 0.5
+  const valueColor =
+    tone === 'danger'
+      ? 'text-[#f295aa]'
+      : tone === 'muted'
+        ? 'text-[#98a3b4]'
+        : ''
+
   return (
-    <div className="card p-5">
-      <div className="text-xs uppercase tracking-wider text-slate-500">{label}</div>
-      <div className={`text-3xl font-semibold mt-1 ${color}`}>{value}</div>
+    <div className="card card-hover p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#98a3b4]">
+            {label}
+          </div>
+          <div className={`stat-value mt-2 ${valueColor}`}>{value}</div>
+        </div>
+        {icon && <div className="opacity-90">{icon}</div>}
+      </div>
+      <div className="flex items-center gap-2 mt-3">
+        {showTrend && (
+          <span
+            className={`badge ${
+              flat ? 'badge-offline' : up ? 'trend-up' : 'trend-down'
+            }`}
+          >
+            <TrendArrow dir={rising ? 'up' : 'down'} />
+            {rising ? '↑' : '↓'} {Math.abs(trend!).toFixed(0)}%
+          </span>
+        )}
+        {note && <span className="text-[11px] text-[#7c8798]">{note}</span>}
+      </div>
+      {showTrend && spanLabel && (
+        <div className="text-[10px] text-[#5d6675] mt-1.5">dibanding {spanLabel} lalu</div>
+      )}
     </div>
   )
 }

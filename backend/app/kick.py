@@ -29,11 +29,13 @@ from concurrent.futures import ThreadPoolExecutor
 from sqlmodel import select
 
 from .config import config_store
-from .db import Device, KickLog, get_session, utcnow
+from .db import Device, DeviceApSeen, KickLog, get_session, utcnow
 from .net import KickTarget, SpoofEngine, normalize_mac
 from .router_client import RouterError, ZteRouter
 from .ssid_map import interface_for_mac
 from .ssid_map import invalidate as invalidate_ssid
+from .ssid_resolver import get_resolver
+from .topo_client import get_client as get_topo_client
 
 log = logging.getLogger("netdash.kick")
 
@@ -102,42 +104,149 @@ def _update_log(mac: str, **fields) -> None:
 # --------------------------------------------------------------- SSID / iface
 
 
-def resolve_interface(mac: str) -> tuple[str, str]:
-    """(interface, source) — source is 'auto', 'manual' or 'fallback'.
+def target_interfaces(mac: str) -> tuple[list[str], str, str]:
+    """Which APs to block. Returns (interfaces, primary, source).
 
-    Falls back to the configured default when the router won't tell us which
-    SSID the device is on, so the UI can ask the user to check.
+    A client that roams between bands keeps one MAC but appears on a different
+    ``DEV.WIFI.APn`` each time. Access Control is per-AP, so blocking only the
+    AP it sits on right now lets it straight back in on the other band. The
+    target set is therefore the union of:
+
+      * a manual per-MAC override (highest priority),
+      * a *fresh* read of the router's WLAN client table, so we never act on a
+        stale cached association,
+      * every AP this MAC has ever been seen on (the ``device_ap_seen`` history).
+    """
+    cfg = config_store.settings
+    manual = cfg.wifi_interface_map.get(normalize_mac(mac))
+    if manual:
+        return [manual], manual, "manual"
+
+    fresh = ""
+    try:
+        fresh = get_resolver().interface_for(mac, force_refresh=True)
+    except Exception as e:  # noqa: BLE001
+        log.warning("fresh SSID lookup failed for %s: %s", mac, e)
+
+    history: list[str] = []
+    try:
+        with get_session() as s:
+            rows = s.exec(
+                select(DeviceApSeen).where(DeviceApSeen.mac == normalize_mac(mac))
+            ).all()
+            # Most recently seen first: the current AP is the likeliest one the
+            # device will try first.
+            history = [
+                r.interface for r in sorted(rows, key=lambda r: r.last_seen, reverse=True)
+            ]
+    except Exception as e:  # noqa: BLE001
+        log.warning("AP history unavailable for %s: %s", mac, e)
+
+    seen: list[str] = []
+    for i in [fresh, *history]:
+        if i and i not in seen:
+            seen.append(i)
+
+    if seen:
+        src = "auto" if fresh and seen == [fresh] else "auto+history"
+        return seen, seen[0], src
+
+    # Nothing on the WLAN: either wired, or the router is not reporting it.
+    if not _is_wireless(mac):
+        return [], "", "wired"
+    return [], cfg.default_wifi_interface, "fallback"
+
+
+def resolve_interface(mac: str) -> tuple[str, str]:
+    """(interface, source) — source is 'auto', 'manual', 'fallback' or 'unknown'.
+
+    Order:
+      1. a per-MAC manual override from Settings,
+      2. the router's WLAN Client Status table, which names the exact AP
+         (``DEV.WIFI.AP5`` etc.) the client is associated with,
+      3. the configured default, only when the device is actually associated
+         with that AP.
+
+    Step 3 matters: the previous version always fell back to
+    ``default_wifi_interface``. On a router where SSID5 and SSID6 are both 5 GHz
+    that wrote the rule to the wrong AP, and because the router accepted the
+    rule the block silently did nothing. Now, when the device is associated with
+    a *different* AP than the default, we refuse to guess and report 'unknown'
+    so the caller can tell the user instead of reporting a false success.
     """
     cfg = config_store.settings
     manual = cfg.wifi_interface_map.get(normalize_mac(mac))
     if manual:
         return manual, "manual"
+
     try:
-        iface, how = interface_for_mac(mac)
-        if iface and how == "auto":
-            return iface, "auto"
+        iface = get_resolver().interface_for(mac)
     except Exception as e:  # noqa: BLE001
         log.warning("SSID auto-detect gagal untuk %s: %s", mac, e)
+        iface = ""
+
+    if iface:
+        return iface, "auto"
+
+    # No association found. A wired client is genuinely not on any AP, so the
+    # ACL rule cannot target it at all.
+    if not iface and not _is_wireless(mac):
+        return "", "wired"
+
     return cfg.default_wifi_interface, "fallback"
+
+
+def _is_wireless(mac: str) -> bool:
+    """True when the router reports this MAC as an associated WLAN client."""
+    try:
+        return bool(get_resolver().interface_for(mac, force_refresh=True))
+    except Exception:  # noqa: BLE001
+        return True
 
 
 # ------------------------------------------------------------------- halves
 
 
-def _router_half(mac: str, iface: str, name: str) -> tuple[bool, str, str]:
-    """Returns (ok, inst_id, error)."""
+def _router_half(
+    mac: str, interfaces: list[str], name: str
+) -> tuple[bool, list[str], list[str], str, list[str]]:
+    """Returns (ok, inst_ids, per_interface_errors, summary_error).
+
+    Creates one Access Control rule per target AP. The router holds only 10 ACL
+    entries in total, so a multi-AP kick consumes several; a full table is
+    reported per interface instead of aborting the whole kick.
+    """
+    if not interfaces:
+        return False, [], [], (
+            "Tidak ada interface WLAN untuk device ini. Device kemungkinan "
+            "kabel (Ethernet), sehingga Access Control per-SSID tidak berlaku."
+        ), []
     try:
         with ZteRouter() as r:
             r.login()
-            if r.is_blocked(mac):
-                return True, r._find_inst_id_by_mac(mac), ""
-            inst = r.block(mac, name=name, interface=iface)
+            created, errors, covered = r.block_multi(mac, interfaces, name=name)
         invalidate_ssid()
-        return True, inst, ""
+        ok = bool(created)
+        missing = [i for i in interfaces if i not in covered]
+        if ok and missing:
+            # Partial success, stated precisely: the device is only stopped from
+            # joining the APs that actually got a rule.
+            summary = (
+                "Blokir hanya berlaku di "
+                + ", ".join(covered)
+                + ". Gagal di: "
+                + ", ".join(missing)
+                + " - device bisa tetap konek lewat SSID itu."
+            )
+        elif not ok:
+            summary = "Gagal memblokir: " + "; ".join(errors)
+        else:
+            summary = ""
+        return ok, created, errors, summary, covered
     except RouterError as e:
-        return False, "", str(e)
+        return False, [], [], str(e), []
     except Exception as e:  # noqa: BLE001
-        return False, "", f"{type(e).__name__}: {e}"
+        return False, [], [], f"{type(e).__name__}: {e}", []
 
 
 def _arp_half(mac: str, ip: str) -> tuple[bool, str]:
@@ -197,7 +306,7 @@ def start_kick(mac: str, ip: str = "", actor: str = "", reason: str = "") -> dic
     if is_kicked(mac) is not None or arp_engine.is_active(mac) is not None:
         raise ValueError("Device sudah sedang di-kick")
 
-    iface, iface_src = resolve_interface(mac)
+    ifaces, primary, iface_src = target_interfaces(mac)
     name = _log_name(mac, ip)
 
     # Log row first so both halves can attach their outcome to it.
@@ -209,23 +318,26 @@ def start_kick(mac: str, ip: str = "", actor: str = "", reason: str = "") -> dic
             reason=reason[:120],
             active=True,
             mode="both",
-            wifi_interface=iface,
+            wifi_interface=primary,
         )
         s.add(row)
         s.commit()
         s.refresh(row)
         log_id = row.id
 
-    f_router = _pool.submit(_router_half, mac, iface, name)
+    f_router = _pool.submit(_router_half, mac, ifaces, name)
     f_arp = _pool.submit(_arp_half, mac, ip)
 
-    router_ok, inst_id, router_err = f_router.result(timeout=60)
-    arp_ok, arp_err = f_arp.result(timeout=60)
+    router_ok, inst_ids, iface_errors, router_err, covered = f_router.result(timeout=90)
+    arp_ok, arp_err = f_arp.result(timeout=90)
 
+    # Every rule id must be stored: stopping the kick has to remove all of them.
+    joined = ",".join(inst_ids)
     _update_log(
         mac,
         router_blocked=router_ok,
-        router_inst_id=inst_id,
+        router_inst_id=inst_ids[0] if inst_ids else "",
+        router_inst_ids=joined,
         arp_active=arp_ok,
         router_error=router_err or arp_err,
     )
@@ -244,21 +356,32 @@ def start_kick(mac: str, ip: str = "", actor: str = "", reason: str = "") -> dic
 
     return {
         "router_blocked": router_ok,
-        "router_inst_id": inst_id,
+        "router_inst_id": inst_ids[0] if inst_ids else "",
+        "router_inst_ids": inst_ids,
         "router_error": router_err,
         "arp_active": arp_ok,
         "arp_error": arp_err,
-        "interface": iface,
+        "interface": primary,
         "interface_source": iface_src,
+        # Per-interface outcome so the UI can show every AP, not just one.
+        "interfaces_targeted": ifaces,
+        "interfaces_blocked": covered,
+        "interfaces_failed": iface_errors,
         "log_id": log_id,
         "arp_seconds": ARP_BURST_SECONDS if arp_ok else 0,
     }
 
 
 def stop_kick(mac: str, actor: str = "") -> dict:
-    """Stop kicking: delete the router rule and stop/restore the ARP spoof."""
+    """Stop kicking: delete every router rule and stop/restore the ARP spoof.
+
+    A multi-AP kick leaves one rule per AP on the same MAC. Deleting only the
+    first would leave the device blocked on the others, so all of them go -
+    including any whose instance id was lost, since unblock_all() re-reads the
+    router's table instead of trusting the database.
+    """
     mac = normalize_mac(mac)
-    inst_id = ""
+    saved_ids = ""
     with get_session() as s:
         row = s.exec(
             select(KickLog)
@@ -266,18 +389,25 @@ def stop_kick(mac: str, actor: str = "") -> dict:
             .order_by(KickLog.started_at.desc())
         ).first()
         if row is not None:
-            inst_id = row.router_inst_id or ""
+            saved_ids = row.router_inst_ids or row.router_inst_id or ""
 
     router_err = ""
+    removed: list[str] = []
+    errors: list[str] = []
     rule_deleted = False
     try:
         with ZteRouter() as r:
             r.login()
-            if inst_id or r.is_blocked(mac):
-                # unblock() falls back to a MAC lookup when inst_id is empty,
-                # which covers a DB reset or an upgrade that lost the column.
-                r.unblock(mac, inst_id or None)
-                rule_deleted = True
+            removed, errors = r.unblock_all(mac)
+            rule_deleted = bool(removed)
+            leftovers = r.rules_for(mac)
+            if leftovers:
+                # The router still holds at least one rule; say which so the user
+                # can remove it by hand if the table is wedged.
+                router_err = (
+                    f"Masih ada {len(leftovers)} rule di router: "
+                    + ", ".join(x.inst_id or x.interface for x in leftovers)
+                )
     except RouterError as e:
         router_err = str(e)
     except Exception as e:  # noqa: BLE001
@@ -293,11 +423,17 @@ def stop_kick(mac: str, actor: str = "") -> dict:
     _notify()
 
     if router_err:
-        raise KickFailed("Gagal menghapus rule dari router.", router_error=router_err)
+        raise KickFailed(
+            "Gagal menghapus semua rule dari router.",
+            router_error=router_err,
+            arp_error="; ".join(errors) if errors else "",
+        )
 
     return {
         "rule_deleted": rule_deleted,
-        "used_inst_id": inst_id,
+        "used_inst_id": removed[0] if removed else "",
+        "removed_inst_ids": removed,
+        "errors": errors,
         "arp_stopped": arp_stopped,
     }
 

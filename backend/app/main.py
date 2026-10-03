@@ -19,6 +19,7 @@ from sqlmodel import select
 from . import auth, kick, net
 from .config import BASE_DIR, config_store
 from .db import Device, DeviceEvent, KickLog, ScanSample, engine, get_session, init_db, utcnow
+from . import fingerprint
 from .router_client import RouterError
 from .scanner import device_to_dict, hub, kicked_map, scan_loop, scan_loop_once
 
@@ -89,6 +90,8 @@ class LoginIn(BaseModel):
 class DevicePatch(BaseModel):
     nickname: str | None = None
     is_static: bool | None = None
+    # "" clears the override and falls back to the automatic guess.
+    type_override: str | None = None
 
 
 class KickIn(BaseModel):
@@ -207,6 +210,17 @@ async def patch_device(mac: str, body: DevicePatch, username: str = Depends(auth
             dev.nickname = body.nickname.strip()[:64]
         if body.is_static is not None:
             dev.is_static = body.is_static
+        if body.type_override is not None:
+            val = body.type_override.strip()
+            if val and val not in fingerprint.ALL_TYPES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Tipe '{val}' tidak dikenal. Pilihan: "
+                        + ", ".join(fingerprint.ALL_TYPES)
+                    ),
+                )
+            dev.type_override = val
         s.add(dev)
         s.commit()
         s.refresh(dev)
@@ -485,15 +499,22 @@ def _router_configured() -> bool:
 
 @app.post("/api/settings")
 async def post_settings(body: SettingsIn, username: str = Depends(auth.require_auth)):
-    changes = body.model_dump()
+    # exclude_unset is essential: model_dump() would report every field, and
+    # since config.update() treats None as "clear this", an omitted setting
+    # would silently wipe itself. Only fields actually sent are changed.
+    changes = body.model_dump(exclude_unset=True)
     if changes.get("subnet"):
         try:
             ipaddress.ip_network(changes["subnet"], strict=False)
         except ValueError:
             raise HTTPException(status_code=400, detail="Subnet tidak valid, contoh: 192.168.1.0/24")
-    if changes.get("gateway_mac"):
-        changes["gateway_mac"] = net.normalize_mac(changes["gateway_mac"])
-        if not net.valid_mac(changes["gateway_mac"]):
+    # "" or None explicitly clears the pin so auto-detection takes over again.
+    if "gateway_mac" in changes:
+        raw = (changes["gateway_mac"] or "").strip()
+        changes["gateway_mac"] = (
+            net.normalize_mac(raw) if raw else None
+        )
+        if changes["gateway_mac"] and not net.valid_mac(changes["gateway_mac"]):
             raise HTTPException(status_code=400, detail="MAC gateway tidak valid")
     if changes.get("whitelist_macs") is not None:
         wl = [net.normalize_mac(m) for m in changes["whitelist_macs"] if m.strip()]

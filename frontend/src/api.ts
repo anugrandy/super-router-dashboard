@@ -3,7 +3,6 @@ export type Device = {
   ip: string
   hostname: string
   vendor: string
-  device_type: string
   nickname: string
   is_gateway: boolean
   online: boolean
@@ -11,9 +10,47 @@ export type Device = {
   last_seen: string | null
   last_online: string | null
   is_static: boolean
+  /** Effective type: the manual override when set, else the auto guess. */
+  device_type: string
+  /** What the classifier produced, kept for the "auto-detected" hint. */
+  guessed_type: string
+  /** Manual override, or '' when the guess is in use. */
+  type_override: string
+  /** Router-reported instantaneous link rates (bits/second). */
+  rx_rate_bps: number
+  tx_rate_bps: number
+  link_band: string
+  /** The AP this device is associated with, e.g. DEV.WIFI.AP5. */
+  wifi_interface: string
+  /** SSID name as the router knows it, e.g. AgraSec. */
+  ssid_name: string
+  /** Cumulative bytes reported by the router. */
+  rx_bytes: number
+  tx_bytes: number
+  data_total_bytes: number
+  /** True when the device uses a private/randomized MAC (no IEEE OUI). */
+  randomized_mac: boolean
+  /** False when the type is a guess with no supporting evidence. */
+  type_confident: boolean
   /** Seconds since the kick began, or null when not being kicked. */
   kicked: number | null
 }
+
+/** Device types the backend can produce or accept as an override. */
+export const DEVICE_TYPES = [
+  'phone',
+  'tablet',
+  'laptop',
+  'desktop',
+  'tv',
+  'printer',
+  'router',
+  'server',
+  'iot',
+  'other',
+] as const
+
+export type DeviceType = (typeof DEVICE_TYPES)[number]
 
 export type KickLog = {
   id: number
@@ -59,9 +96,15 @@ export type KickReport = {
   arp_active: boolean
   arp_error: string
   interface: string
-  interface_source: 'auto' | 'manual' | 'fallback'
+  /** 'auto+history' means several APs were targeted from the roam history. */
+  interface_source: 'auto' | 'auto+history' | 'manual' | 'fallback' | 'wired'
   log_id: number
   arp_seconds: number
+  /** Every AP a rule was created on. */
+  router_inst_ids?: string[]
+  interfaces_targeted?: string[]
+  interfaces_blocked?: string[]
+  interfaces_failed?: string[]
 }
 
 export type RouterStatus = {
@@ -151,6 +194,12 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ nickname }),
     }),
+  /** Override the auto-detected type. Pass '' to return to auto-detection. */
+  setType: (mac: string, typeOverride: string) =>
+    req<Device>(`/api/devices/${enc(mac)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ type_override: typeOverride }),
+    }),
   kick: (mac: string, reason = '', maxSeconds?: number) =>
     req<KickReport>(`/api/devices/${enc(mac)}/kick`, {
       method: 'POST',
@@ -162,6 +211,9 @@ export const api = {
       was_active: boolean
       rule_deleted: boolean
       used_inst_id: string
+      /** Every rule removed - one per AP a multi-interface kick created. */
+      removed_inst_ids?: string[]
+      errors?: string[]
       arp_stopped: boolean
     }>(`/api/devices/${enc(mac)}/unkick`, { method: 'POST' }),
   scanNow: () => req<{ ok: boolean }>('/api/scan', { method: 'POST' }),
@@ -173,6 +225,12 @@ export const api = {
     req<{ ok: boolean; blocked: string[] }>('/api/router/sync', { method: 'POST' }),
   kicks: () => req<{ kicks: KickLog[] }>('/api/kicks'),
   settings: () => req<Settings>('/api/settings'),
+  /** Replace the whole per-MAC interface map (the API has no partial update). */
+  saveWifiInterfaceMap: (map: Record<string, string>) =>
+    req<{ ok: boolean }>('/api/settings', {
+      method: 'POST',
+      body: JSON.stringify({ wifi_interface_map: map }),
+    }),
   saveSettings: (body: Partial<Settings> & { username?: string }) =>
     req<{ ok: boolean }>('/api/settings', { method: 'POST', body: JSON.stringify(body) }),
   changePassword: (password: string) =>
@@ -188,16 +246,39 @@ export function enc(mac: string): string {
 
 export const TYPE_LABEL: Record<string, string> = {
   phone: 'HP',
-  computer: 'Laptop/PC',
+  tablet: 'Tablet',
+  laptop: 'Laptop',
+  desktop: 'PC',
   tv: 'TV/Streaming',
+  printer: 'Printer',
+  router: 'Router/AP',
+  server: 'Linux/Server',
   iot: 'IoT',
-  router: 'Router',
-  server: 'Server',
+  other: 'Lainnya',
+  // Legacy values from older databases.
+  computer: 'Laptop/PC',
   unknown: 'Lainnya',
 }
 
 export function displayName(d: Device): string {
-  return d.nickname || d.hostname || d.ip || d.mac
+  // The router echoes the MAC back as HostName when DHCP has no name, so a
+  // hostname equal to the MAC carries no information.
+  const host = d.hostname?.trim()
+  const hostUseful = host && host.toUpperCase() !== d.mac.toUpperCase() ? host : ''
+  return d.nickname || hostUseful || d.ip || d.mac
+}
+
+/** Human-readable bits/s, for the router-reported link rate. */
+export function fmtRate(bps: number): string {
+  if (!bps || bps < 1) return '—'
+  const units = ['bps', 'Kbps', 'Mbps', 'Gbps']
+  let v = bps
+  let u = 0
+  while (v >= 1000 && u < units.length - 1) {
+    v /= 1000
+    u += 1
+  }
+  return `${v >= 100 || u === 0 ? Math.round(v) : v.toFixed(1)} ${units[u]}`
 }
 
 export function fmtAge(iso: string | null): string {

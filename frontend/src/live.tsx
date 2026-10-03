@@ -16,8 +16,6 @@ type LiveState = {
   kicked: KickedMap
   lastEventAt: number | null
   error: string | null
-  /** Increments every second so elapsed-time UI can recompute. */
-  tick: number
 }
 
 const LiveCtx = createContext<LiveState>({
@@ -26,11 +24,25 @@ const LiveCtx = createContext<LiveState>({
   kicked: {},
   lastEventAt: null,
   error: null,
-  tick: 0,
 })
 
 export function useLive() {
   return useContext(LiveCtx)
+}
+
+/**
+ * Second-by-second clock for kick countdowns, in its own context.
+ *
+ * It used to be a `tick` field on LiveState, which meant every consumer of
+ * useLive() re-rendered once per second - all device rows included - even when
+ * nothing was being kicked. Keeping it separate means only the components that
+ * actually display a countdown subscribe to it.
+ */
+const ClockCtx = createContext<number>(0)
+
+/** Returns a counter that advances once per second. Use only for countdowns. */
+export function useClock() {
+  return useContext(ClockCtx)
 }
 
 /**
@@ -45,8 +57,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     kicked: {},
     lastEventAt: null,
     error: null,
-    tick: 0,
   })
+  const [tick, setTick] = useState(0)
   const wsRef = useRef<WebSocket | null>(null)
   const retryRef = useRef(0)
   const closedRef = useRef(false)
@@ -116,35 +128,47 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // Local 1 Hz tick so the kicked countdown animates without server pushes.
+  // It stops entirely when nothing is kicked: an always-on timer forced a
+  // context update per second, which re-rendered the whole app for no visible
+  // change. Only countdown consumers subscribe to this now.
+  const anyKicked = Object.keys(state.kicked).length > 0
   useEffect(() => {
-    const id = window.setInterval(
-      () => setState((s) => ({ ...s, tick: s.tick + 1 })),
-      1000,
-    )
+    if (!anyKicked) return
+    const id = window.setInterval(() => setTick((t) => t + 1), 1000)
     return () => window.clearInterval(id)
-  }, [])
+  }, [anyKicked])
 
   // Merge the kicked map onto devices so every view shows consistent badges.
-  // `state.kicked` holds the epoch second each kick started; the UI wants
-  // elapsed seconds, recomputed on the 1 Hz tick above so the timer advances.
+  // The kicked value stays the *epoch second* the kick began: computing
+  // elapsed seconds here would tie every row's identity to the 1 Hz clock.
+  // KickedBadge derives the countdown locally instead.
   const devices = useMemo(
     () =>
       state.devices.map((d) => {
         const started = state.kicked[d.mac]
         return {
           ...d,
-          kicked: started == null ? null : Math.max(0, Date.now() / 1000 - started),
+          // null = not kicked; otherwise the epoch second it started.
+          kicked: started == null ? null : started,
         }
       }),
-    // state.tick forces a recompute every second for the countdown.
-    [state.devices, state.kicked, state.tick],
+    [state.devices, state.kicked],
   )
 
   const value = useMemo<LiveState>(
     () => ({ ...state, devices }),
     [state, devices],
   )
-  return <LiveCtx.Provider value={value}>{children}</LiveCtx.Provider>
+  return (
+    <ClockCtx.Provider value={tick}>
+      <LiveCtx.Provider value={value}>{children}</LiveCtx.Provider>
+    </ClockCtx.Provider>
+  )
+}
+
+/** Seconds elapsed since a kick started, recomputed once per second. */
+export function elapsedOf(startedEpoch: number): number {
+  return Math.max(0, Date.now() / 1000 - startedEpoch)
 }
 
 /** Session state, used by the router guard and the header. */

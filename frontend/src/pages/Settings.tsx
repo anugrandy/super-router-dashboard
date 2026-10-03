@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 const location = globalThis.location
 import { api, type IfaceReport, type RouterStatus, type Settings } from '../api'
 import { useAuth } from '../live'
+import { PageHeader } from '../components/Layout'
 
 export default function SettingsPage() {
   const { username } = useAuth()
@@ -94,27 +95,29 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-5 max-w-3xl">
-      <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">Settings</h1>
-        <span className="mono text-xs text-slate-500">
-          backend: {location.host}
-        </span>
-      </div>
+    <div className="max-w-3xl">
+      <PageHeader
+        title="Settings"
+        subtitle={
+          <>
+            <span className="mono">backend: {location.host}</span>
+          </>
+        }
+      />
 
       {msg && (
-        <div className="card px-4 py-3 border-emerald-500/40 bg-emerald-500/10 text-sm text-emerald-200">
+        <div className="card px-4 py-3 border-emerald-400/30 bg-emerald-400/[0.07] text-sm text-[#6fd9b8] mb-4">
           {msg}
         </div>
       )}
       {err && (
-        <div className="card px-4 py-3 border-rose-500/40 bg-rose-500/10 text-sm text-rose-200">
+        <div className="card px-4 py-3 border-rose-400/30 bg-rose-400/[0.07] text-sm text-[#f295aa] mb-4">
           {err}
         </div>
       )}
 
-      <section className="card p-5 space-y-4">
-        <h2 className="text-sm font-semibold">Scan</h2>
+      <section className="card card-hover p-5 space-y-4">
+        <h2 className="card-title">Scan</h2>
 
         <Field label="Subnet target" hint={`Default 192.168.1.0/24 · IP lokal kamu: ${s.local_ip ?? 'tidak terdeteksi'}`}>
           <input
@@ -157,7 +160,7 @@ export default function SettingsPage() {
       </section>
 
       <section className="card p-5 space-y-3">
-        <h2 className="text-sm font-semibold">Diagnostik kick</h2>
+        <h2 className="card-title">Diagnostik kick</h2>
         {net?.is_admin === false ? (
           <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-200">
             <strong>Backend tidak berjalan sebagai Administrator.</strong> ARP spoof
@@ -165,7 +168,7 @@ export default function SettingsPage() {
             server dijalankan ulang dengan &ldquo;Run as Administrator&rdquo;.
           </div>
         ) : net?.is_admin ? (
-          <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-200">
+          <div className="rounded-[12px] border border-emerald-400/30 bg-emerald-400/[0.07] px-3 py-2.5 text-sm text-[#6fd9b8]">
             Backend berjalan dengan hak Administrator — spoof bisa dikirim.
           </div>
         ) : null}
@@ -205,7 +208,7 @@ export default function SettingsPage() {
                   <span className="mono text-slate-500">{i.ip ?? '-'}</span>
                   {i.is_default && (
                     <span className="text-amber-400">
-                      · default scapy (berisiko; diabaikan netdash)
+                      · default scapy (berisiko; diabaikan aplikasi)
                     </span>
                   )}
                 </li>
@@ -214,15 +217,15 @@ export default function SettingsPage() {
           </div>
         )}
 
-        <p className="text-xs text-slate-500 leading-relaxed">
-          netdash selalu mengirim lewat adapter yang memegang IP lokal kamu, bukan
+        <p className="text-[11px] text-[#5d6675] leading-relaxed">
+          Aplikasi ini selalu mengirim lewat adapter yang memegang IP lokal kamu, bukan
           default scapy — di mesin dengan VMware/VirtualBox, default scapy bisa
           menunjuk adapter virtual sehingga frame tidak pernah sampai ke LAN.
         </p>
       </section>
 
-      <section className="card p-5 space-y-4">
-        <h2 className="text-sm font-semibold">Kick</h2>
+      <section className="card card-hover p-5 space-y-4">
+        <h2 className="card-title">Kick</h2>
 
         <Field
           label="Metode kick"
@@ -251,7 +254,7 @@ export default function SettingsPage() {
         </Field>
 
         {!s.router_configured && (
-          <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2.5 text-sm text-rose-200">
+          <div className="rounded-[12px] border border-rose-400/30 bg-rose-400/[0.07] px-3 py-2.5 text-sm text-[#f295aa] mb-4">
             <strong>Kredensial router tidak ditemukan.</strong>{' '}
             {s.env_file_found
               ? 'backend/.env ada tapi NETDASH_ROUTER_USER/PASS kosong di dalamnya.'
@@ -261,10 +264,10 @@ export default function SettingsPage() {
 
         {router && (
           <div
-            className={`rounded-lg border px-3 py-2.5 text-sm ${
+            className={`rounded-[12px] border px-3 py-2.5 text-sm ${
               router.reachable
-                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
-                : 'border-rose-500/40 bg-rose-500/10 text-rose-200'
+                ? 'border-emerald-400/30 bg-emerald-400/[0.07] text-[#6fd9b8]'
+                : 'border-rose-400/30 bg-rose-400/[0.07] text-[#f295aa]'
             }`}
           >
             {router.reachable ? 'Router terhubung.' : 'Router tidak bisa dihubungi.'}{' '}
@@ -311,8 +314,8 @@ export default function SettingsPage() {
         </Field>
       </section>
 
-      <section className="card p-5 space-y-4">
-        <h2 className="text-sm font-semibold">Vendor lookup</h2>
+      <section className="card card-hover p-5 space-y-4">
+        <h2 className="card-title">Vendor lookup</h2>
         <Field
           label="File oui.csv opsional"
           hint="Kosongkan untuk memakai database IEEE bawaan (~40k entri, offline)."
@@ -326,8 +329,8 @@ export default function SettingsPage() {
         </Field>
       </section>
 
-      <section className="card p-5 space-y-4">
-        <h2 className="text-sm font-semibold">Akun</h2>
+      <section className="card card-hover p-5 space-y-4">
+        <h2 className="card-title">Akun</h2>
         <Field label={`Password untuk "${username}"`} hint="Minimal 6 karakter">
           <input
             className="input"
@@ -362,7 +365,7 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-xs uppercase tracking-wider text-slate-400 mb-1.5">
+      <label className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5d6675] mb-1.5">
         {label}
       </label>
       {children}
