@@ -18,7 +18,7 @@ import { AuthProvider, LiveProvider, useAuth } from './live'
 function RequireAuth({ children }: { children: ReactNode }) {
   const { username, loading } = useAuth()
   if (loading) {
-    return <div className="min-h-screen grid place-items-center text-sm text-slate-500">Memuat…</div>
+    return <div className="min-h-screen grid place-items-center text-sm text-muted2">Memuat…</div>
   }
   if (!username) return <Navigate to="/login" replace />
   return <Layout>{children}</Layout>
@@ -33,7 +33,7 @@ export default function App() {
         <LiveProvider>
           <Suspense
             fallback={
-              <div className="min-h-screen grid place-items-center text-sm text-[#7c8798]">
+              <div className="min-h-screen grid place-items-center text-sm text-[#8B8D93]">
                 Memuat…
               </div>
             }

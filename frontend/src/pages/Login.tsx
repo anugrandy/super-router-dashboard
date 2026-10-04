@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../live'
-import { UiDashboard } from '../components/icons'
+import { UiMark } from '../components/icons'
 
 export default function Login() {
   const { login, username } = useAuth()
@@ -31,18 +31,23 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative z-[1]">
-      <form onSubmit={submit} className="card w-full max-w-sm p-7">
+      <form onSubmit={submit} className="card w-full max-w-sm p-7 p-8">
         <div className="flex items-center gap-2.5 mb-1">
-          <span className="inline-flex items-center justify-center w-9 h-9 rounded-[11px] bg-accent-600/90 text-white">
-            <UiDashboard />
+          <span
+            className="inline-flex items-center justify-center w-9 h-9 rounded-[7px]"
+            style={{ background: 'var(--color-accent)', color: '#17130a' }}
+          >
+            <UiMark size={19} />
           </span>
-          <h1 className="text-xl font-semibold tracking-tight">AN Telemetry</h1>
+          <h1 className="font-display text-xl font-bold tracking-tight">
+            AN Telemetry
+          </h1>
         </div>
-        <p className="text-sm text-[#7c8798] mt-1 mb-6">
+        <p className="text-sm text-muted mt-1 mb-6">
           Dashboard &amp; device manager jaringan rumah
         </p>
 
-        <label className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5d6675] mb-1.5">
+        <label className="stat-label block mb-1.5">
           Username
         </label>
         <input
@@ -53,7 +58,7 @@ export default function Login() {
           required
         />
 
-        <label className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5d6675] mb-1.5">
+        <label className="stat-label block mb-1.5">
           Password
         </label>
         <input
@@ -67,7 +72,12 @@ export default function Login() {
         />
 
         {err && (
-          <div className="mb-4 rounded-[12px] border border-rose-500/35 bg-rose-500/[0.07] px-3 py-2 text-sm text-[#f295aa]">
+          <div className="mb-4 rounded-[10px] border px-3 py-2 text-sm"
+              style={{
+                borderColor: 'rgba(232,96,74,0.32)',
+                background: 'rgba(232,96,74,0.07)',
+                color: '#ef8877',
+              }}>
             {err}
           </div>
         )}
@@ -76,7 +86,7 @@ export default function Login() {
           {busy ? 'Memproses…' : 'Masuk'}
         </button>
 
-        <p className="mt-5 text-[11px] text-[#5d6675] leading-relaxed">
+        <p className="mt-5 text-[11px] text-muted2 leading-relaxed">
           Hanya untuk jaringan milik sendiri. Login default: <span className="mono">admin</span> /{' '}
           <span className="mono">netdash</span> (ubah lewat Settings).
         </p>

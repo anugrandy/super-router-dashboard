@@ -55,6 +55,33 @@ export const UiSettings = ({ className = '' }: { className?: string }) => (
 export const UiSearch = ({ className = '' }: { className?: string }) => (
   <Icon Ico={Search} size={15} className={className} />
 )
+
+/** Brand mark: a hub with three spokes. Hand-drawn rather than pulled from a
+ *  generic icon set, so the logo reads as chosen instead of assembled. */
+export function UiMark({ size = 17 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="shrink-0"
+    >
+      <circle cx="12" cy="12" r="2.6" />
+      <path d="M12 9.4V4.6" />
+      <path d="M10.1 13.3 5.6 17.4" />
+      <path d="M13.9 13.3l4.5 4.1" />
+      <circle cx="12" cy="3.4" r="1.5" />
+      <circle cx="4.6" cy="18.4" r="1.5" />
+      <circle cx="19.4" cy="18.4" r="1.5" />
+    </svg>
+  )
+}
 export const UiLogout = ({ className = '' }: { className?: string }) => (
   <Icon Ico={LogOut} size={15} className={className} />
 )
@@ -101,17 +128,17 @@ export const TYPE_ICON: Record<string, LucideIcon> = {
 
 /** Per-type tint, kept muted so the table does not turn into confetti. */
 const TYPE_TINT: Record<string, { bg: string; fg: string }> = {
-  phone: { bg: 'rgba(91,124,240,0.14)', fg: '#9db4f7' },
-  tablet: { bg: 'rgba(91,124,240,0.14)', fg: '#9db4f7' },
-  laptop: { bg: 'rgba(79,209,197,0.13)', fg: '#6fd8d0' },
-  desktop: { bg: 'rgba(79,209,197,0.13)', fg: '#6fd8d0' },
-  tv: { bg: 'rgba(167,139,250,0.14)', fg: '#b79efb' },
-  printer: { bg: 'rgba(124,135,152,0.14)', fg: '#a3adbd' },
-  router: { bg: 'rgba(242,113,139,0.13)', fg: '#f295aa' },
-  server: { bg: 'rgba(240,180,41,0.12)', fg: '#e0bb63' },
-  iot: { bg: 'rgba(240,180,41,0.12)', fg: '#e0bb63' },
-  other: { bg: 'rgba(124,135,152,0.10)', fg: '#98a3b4' },
-  unknown: { bg: 'rgba(124,135,152,0.10)', fg: '#98a3b4' },
+  phone: { bg: 'rgba(139,141,147,0.14)', fg: '#8B8D93' },
+  tablet: { bg: 'rgba(139,141,147,0.14)', fg: '#8B8D93' },
+  laptop: { bg: 'rgba(62,210,140,0.13)', fg: '#3ED28C' },
+  desktop: { bg: 'rgba(62,210,140,0.13)', fg: '#3ED28C' },
+  tv: { bg: 'rgba(139,141,147,0.14)', fg: '#8B8D93' },
+  printer: { bg: 'rgba(139,141,147,0.14)', fg: '#8B8D93' },
+  router: { bg: 'rgba(232,96,74,0.13)', fg: '#E8604A' },
+  server: { bg: 'rgba(231,179,74,0.12)', fg: '#E7B34A' },
+  iot: { bg: 'rgba(231,179,74,0.12)', fg: '#E7B34A' },
+  other: { bg: 'rgba(139,141,147,0.10)', fg: '#8B8D93' },
+  unknown: { bg: 'rgba(139,141,147,0.10)', fg: '#8B8D93' },
 }
 
 /** The raw glyph for a device type, with a safe fallback. */
@@ -149,8 +176,8 @@ export const STAT_ICON = {
 } as const
 
 export const STAT_TINT = {
-  total: { bg: 'rgba(167,139,250,0.16)', fg: '#b79efb' },
-  online: { bg: 'rgba(70,201,162,0.16)', fg: '#6fd9b8' },
-  offline: { bg: 'rgba(124,135,152,0.16)', fg: '#a3adbd' },
-  kick: { bg: 'rgba(242,113,139,0.16)', fg: '#f295aa' },
+  total: { bg: 'rgba(139,141,147,0.16)', fg: '#8B8D93' },
+  online: { bg: 'rgba(62,210,140,0.16)', fg: '#3ED28C' },
+  offline: { bg: 'rgba(139,141,147,0.16)', fg: '#8B8D93' },
+  kick: { bg: 'rgba(232,96,74,0.16)', fg: '#E8604A' },
 } as const

@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+
+# Every build output, including the ad-hoc dist-* directories created while
+# iterating. Mirrors the root .gitignore; a nested file takes precedence for
+# paths under frontend/, so these rules have to be repeated here.
+dist*/

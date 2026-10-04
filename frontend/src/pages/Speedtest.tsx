@@ -115,21 +115,21 @@ export default function SpeedtestPage() {
             )}
           </button>
 
-          <p className="text-[11px] text-[#5d6675] mt-3 leading-relaxed">
+          <p className="text-[11px] text-[#58585F] mt-3 leading-relaxed">
             Test memakai bandwidth penuh selama ±10–30 detik, jadi tidak
             dijalankan otomatis. Klik lagi setelah selesai untuk mengulang.
           </p>
 
           {status.running && (
-            <div className="mt-4 rounded-[12px] border border-base-700 px-3 py-2.5">
-              <div className="text-[13px] text-[#c9d3e2]">{status.phase || 'Menguji…'}</div>
-              <div className="text-[11px] text-[#7c8798] mt-0.5">
+            <div className="mt-4 rounded-[12px] border border-border px-3 py-2.5">
+              <div className="text-[13px] text-[#CFCFD4]">{status.phase || 'Menguji…'}</div>
+              <div className="text-[11px] text-[#8B8D93] mt-0.5">
                 {status.elapsed.toFixed(0)} detik berjalan
               </div>
               {/* Determinate bar driven only by elapsed time: no extra polling. */}
-              <div className="mt-2 h-1.5 rounded-full bg-base-800 overflow-hidden">
+              <div className="mt-2 h-1.5 rounded-full bg-surface2 overflow-hidden">
                 <div
-                  className="h-full bg-accent-500 transition-all"
+                  className="h-full bg-accent transition-all"
                   style={{ width: `${Math.min(95, (status.elapsed / 30) * 100)}%` }}
                 />
               </div>
@@ -137,7 +137,7 @@ export default function SpeedtestPage() {
           )}
 
           {err && (
-            <div className="mt-4 rounded-[12px] border border-rose-400/30 bg-rose-400/[0.07] px-3 py-2.5 text-[12px] text-[#f295aa]">
+            <div className="mt-4 rounded-[12px] border border-[rgba(232,96,74,0.3)] bg-[rgba(232,96,74,0.07)] px-3 py-2.5 text-[12px] text-[#E8604A]">
               {err}
             </div>
           )}
@@ -177,13 +177,13 @@ export default function SpeedtestPage() {
                 <Line k="ISP kamu" v={result.client_isp || '-'} />
                 <Line k="Waktu" v={fmtTime(result.at)} />
               </dl>
-              <p className="text-[11px] text-[#5d6675] mt-3 leading-relaxed">
+              <p className="text-[11px] text-[#58585F] mt-3 leading-relaxed">
                 Ping diukur sebagai median waktu koneksi TCP ke server yang sama
                 (speedtest-cli melaporkan angka tidak valid di koneksi ini).
               </p>
             </>
           ) : (
-            <p className="text-[13px] text-[#7c8798]">
+            <p className="text-[13px] text-[#8B8D93]">
               Belum ada hasil. Tekan “Mulai Test”.
             </p>
           )}
@@ -193,7 +193,7 @@ export default function SpeedtestPage() {
       <div className="card p-5 mt-4">
         <h2 className="card-title mb-4">Riwayat test</h2>
         {history.length === 0 ? (
-          <p className="text-[13px] text-[#7c8798]">Belum ada riwayat.</p>
+          <p className="text-[13px] text-[#8B8D93]">Belum ada riwayat.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="net">
@@ -210,13 +210,13 @@ export default function SpeedtestPage() {
               <tbody>
                 {history.map((r) => (
                   <tr key={r.id}>
-                    <td className="text-[#98a3b4] text-xs">{fmtTime(r.at)}</td>
+                    <td className="text-[#8B8D93] text-xs">{fmtTime(r.at)}</td>
                     <td className="mono">{r.download_mbps.toFixed(1)} Mbps</td>
                     <td className="mono">{r.upload_mbps.toFixed(1)} Mbps</td>
                     <td className="mono">
                       {r.ping_ms ? `${r.ping_ms.toFixed(1)} ms` : '—'}
                     </td>
-                    <td className="text-[#98a3b4] text-xs max-w-[220px] truncate">
+                    <td className="text-[#8B8D93] text-xs max-w-[220px] truncate">
                       {r.server_sponsor || r.server_name || '-'}
                     </td>
                     <td>
@@ -250,12 +250,12 @@ function Metric({
 }) {
   const tint =
     tone === 'down'
-      ? { bg: 'rgba(91,124,240,0.14)', fg: '#9db4f7' }
+      ? { bg: 'rgba(139,141,147,0.14)', fg: '#8B8D93' }
       : tone === 'up'
-        ? { bg: 'rgba(70,201,162,0.14)', fg: '#6fd9b8' }
-        : { bg: 'rgba(167,139,250,0.14)', fg: '#b79efb' }
+        ? { bg: 'rgba(62,210,140,0.14)', fg: '#3ED28C' }
+        : { bg: 'rgba(139,141,147,0.14)', fg: '#8B8D93' }
   return (
-    <div className="rounded-[12px] border border-base-700 px-4 py-3">
+    <div className="rounded-[12px] border border-border px-4 py-3">
       <div className="flex items-center gap-2">
         <span
           className="inline-flex items-center justify-center w-7 h-7 rounded-[9px]"
@@ -263,15 +263,15 @@ function Metric({
         >
           {icon}
         </span>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#7c8798]">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8B8D93]">
           {label}
         </span>
       </div>
       <div className="mt-2 flex items-baseline gap-1.5">
-        <span className="text-2xl font-extrabold tracking-tight text-[#f2f5fa]">
+        <span className="text-2xl font-extrabold tracking-tight text-[#F2F2F3]">
           {value}
         </span>
-        <span className="text-[12px] text-[#7c8798]">{unit}</span>
+        <span className="text-[12px] text-[#8B8D93]">{unit}</span>
       </div>
     </div>
   )
@@ -280,8 +280,8 @@ function Metric({
 function Line({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex justify-between gap-3">
-      <dt className="text-[#5d6675]">{k}</dt>
-      <dd className="text-right text-[#b6bfcd] truncate">{v}</dd>
+      <dt className="text-[#58585F]">{k}</dt>
+      <dd className="text-right text-[#8B8D93] truncate">{v}</dd>
     </div>
   )
 }

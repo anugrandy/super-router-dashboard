@@ -15,9 +15,9 @@ function Row({
 }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-2 border-b border-[rgba(255,255,255,0.04)] last:border-0">
-      <span className="text-[12px] text-[#7c8798] shrink-0">{label}</span>
+      <span className="text-[12px] text-[#8B8D93] shrink-0">{label}</span>
       <span
-        className={`text-[13px] text-[#e6eaf2] text-right truncate ${mono ? 'mono' : ''}`}
+        className={`text-[13px] text-[#E6E6E9] text-right truncate ${mono ? 'mono' : ''}`}
         title={value}
       >
         {value || '—'}
@@ -34,7 +34,7 @@ function StatusPill({
   label: string
 }) {
   const up = status === 'connected'
-  const color = up ? '#6fd9b8' : status === 'disconnected' ? '#f295aa' : '#7c8798'
+  const color = up ? '#3ED28C' : status === 'disconnected' ? '#E8604A' : '#8B8D93'
   return (
     <span
       className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-medium"
@@ -109,24 +109,24 @@ export default function ConnectionPage() {
       />
 
       {err && (
-        <div className="card px-4 py-3 mb-4 border-rose-400/30 bg-rose-400/[0.07] text-sm text-[#f295aa]">
+        <div className="card px-4 py-3 mb-4 border-[rgba(232,96,74,0.3)] bg-[rgba(232,96,74,0.07)] text-sm text-[#E8604A]">
           {err}
         </div>
       )}
 
       {!s ? (
-        <div className="card p-10 text-center text-[13px] text-[#7c8798]">Memuat…</div>
+        <div className="card p-10 text-center text-[13px] text-[#8B8D93]">Memuat…</div>
       ) : !s.available ? (
-        <div className="card p-6 border-rose-400/30 bg-rose-400/[0.05]">
-          <div className="flex items-center gap-2 text-[#f295aa] font-semibold text-[14px]">
+        <div className="card p-6 border-[rgba(232,96,74,0.3)] bg-[rgba(232,96,74,0.07)]">
+          <div className="flex items-center gap-2 text-[#E8604A] font-semibold text-[14px]">
             <IconUnplug size={16} />
             Router tidak bisa dihubungi
           </div>
-          <p className="text-[12px] text-[#9aa4b3] mt-2 leading-5">
+          <p className="text-[12px] text-[#8B8D93] mt-2 leading-5">
             {s.error || 'Tidak ada respons dari router.'}
           </p>
-          <p className="text-[12px] text-[#7c8798] mt-2 leading-5">
-            Ini <strong className="text-[#dbe1ec]">bukan</strong> berarti internet
+          <p className="text-[12px] text-[#8B8D93] mt-2 leading-5">
+            Ini <strong className="text-[#F2F2F3]">bukan</strong> berarti internet
             mati — router bisa saja sedang restart. Status internet terakhir yang
             diketahui masih dipakai sampai router merespons lagi.
           </p>
@@ -137,24 +137,24 @@ export default function ConnectionPage() {
           <div
             className="card p-5 mb-4 flex items-center gap-4 flex-wrap"
             style={{
-              borderColor: up ? 'rgba(70,201,162,0.3)' : 'rgba(242,113,139,0.35)',
-              background: up ? 'rgba(12,38,32,0.5)' : 'rgba(56,17,27,0.5)',
+              borderColor: up ? 'rgba(62,210,140,0.3)' : 'rgba(232,96,74,0.35)',
+              background: up ? 'rgba(14,32,24,0.55)' : 'rgba(38,18,16,0.55)',
             }}
           >
             <div
               className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
-              style={{ color: up ? '#6fd9b8' : '#f295aa', background: `${up ? '#46c9a2' : '#f2718b'}1f` }}
+              style={{ color: up ? '#3ED28C' : '#E8604A', background: `${up ? '#3ED28C' : '#E8604A'}1f` }}
             >
               {up ? <IconPlug size={26} /> : <IconUnplug size={26} />}
             </div>
             <div className="min-w-0 flex-1">
               <div
                 className="text-[22px] font-bold leading-tight"
-                style={{ color: up ? '#8fe6c9' : '#ffb3c2' }}
+                style={{ color: up ? '#3ED28C' : '#E8604A' }}
               >
                 {up ? 'Internet Tersambung' : 'Internet Terputus'}
               </div>
-              <div className="text-[12px] text-[#9aa4b3] mt-1">
+              <div className="text-[12px] text-[#8B8D93] mt-1">
                 {s.connection_name} · {s.connection_type || '—'}
                 {up
                   ? ` · sudah online ${s.online_human}`
@@ -173,10 +173,10 @@ export default function ConnectionPage() {
 
           {/* Outage reason gets its own callout when present */}
           {s.disconnect_reason && (
-            <div className="card px-4 py-3 mb-4 border-rose-400/30 bg-rose-400/[0.06]">
-              <div className="text-[12px] font-semibold text-[#ffb3c2]">Penyebab putusnya koneksi</div>
-              <div className="mono text-[12px] text-[#e6eaf2] mt-1">{s.disconnect_reason}</div>
-              <p className="text-[11px] text-[#9aa4b3] mt-1.5 leading-4">
+            <div className="card px-4 py-3 mb-4 border-[rgba(232,96,74,0.3)] bg-[rgba(232,96,74,0.07)]">
+              <div className="text-[12px] font-semibold text-[#E8604A]">Penyebab putusnya koneksi</div>
+              <div className="mono text-[12px] text-[#E6E6E9] mt-1">{s.disconnect_reason}</div>
+              <p className="text-[11px] text-[#8B8D93] mt-1.5 leading-4">
                 Kode ini berasal dari router (ISP). Wi-Fi lokal di rumah tetap
                 aktif, jadi perangkat yang tersambung ke access point tidak ikut
                 terputus.
@@ -186,7 +186,7 @@ export default function ConnectionPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
             <div className="card p-4">
-              <h3 className="text-[13px] font-semibold text-[#dbe1ec] mb-1">IPv4</h3>
+              <h3 className="text-[13px] font-semibold text-[#F2F2F3] mb-1">IPv4</h3>
               <Row label="Status" value={s.ipv4_status} mono={false} />
               <Row label="IP WAN" value={s.ipv4_address} />
               <Row label="Gateway" value={s.gateway} />
@@ -196,11 +196,11 @@ export default function ConnectionPage() {
             </div>
 
             <div className="card p-4">
-              <h3 className="text-[13px] font-semibold text-[#dbe1ec] mb-1">
+              <h3 className="text-[13px] font-semibold text-[#F2F2F3] mb-1">
                 IPv6 {s.ipv6_status !== 'unknown' && <StatusPill status={s.ipv6_status} label={v6 ? 'aktif' : 'mati'} />}
               </h3>
               {s.ipv6_status === 'unknown' ? (
-                <p className="text-[12px] text-[#7c8798] py-2">
+                <p className="text-[12px] text-[#8B8D93] py-2">
                   ISP belum mengaktifkan IPv6 pada koneksi ini.
                 </p>
               ) : (
@@ -214,7 +214,7 @@ export default function ConnectionPage() {
             </div>
 
             <div className="card p-4">
-              <h3 className="text-[13px] font-semibold text-[#dbe1ec] mb-1">Koneksi</h3>
+              <h3 className="text-[13px] font-semibold text-[#F2F2F3] mb-1">Koneksi</h3>
               <Row label="Nama" value={s.connection_name} mono={false} />
               <Row label="Tipe" value={s.connection_type} mono={false} />
               <Row label="Autentikasi" value={s.auth_type || '—'} mono={false} />
@@ -226,7 +226,7 @@ export default function ConnectionPage() {
 
             {/* Every connection the router reports, so a rename is visible */}
             <div className="card p-4">
-              <h3 className="text-[13px] font-semibold text-[#dbe1ec] mb-1">
+              <h3 className="text-[13px] font-semibold text-[#F2F2F3] mb-1">
                 Semua koneksi di router
               </h3>
               <ul className="text-[12px]">
@@ -238,12 +238,12 @@ export default function ConnectionPage() {
                     <span
                       className="w-1.5 h-1.5 rounded-full shrink-0"
                       style={{
-                        background: c.ipv4_status === 'connected' ? '#6fd9b8' : '#7c8798',
+                        background: c.ipv4_status === 'connected' ? '#3ED28C' : '#8B8D93',
                       }}
                     />
-                    <span className="text-[#e6eaf2] w-24 shrink-0">{c.name}</span>
-                    <span className="text-[#7c8798] w-16 shrink-0">{c.type || '—'}</span>
-                    <span className="mono text-[#9aa4b3] truncate">
+                    <span className="text-[#E6E6E9] w-24 shrink-0">{c.name}</span>
+                    <span className="text-[#8B8D93] w-16 shrink-0">{c.type || '—'}</span>
+                    <span className="mono text-[#8B8D93] truncate">
                       {c.ipv4_address && c.ipv4_address !== '0.0.0.0' ? c.ipv4_address : '—'}
                     </span>
                     {c.is_default_gateway && <span className="badge badge-accent shrink-0">default</span>}
@@ -256,15 +256,15 @@ export default function ConnectionPage() {
           {/* Outage history */}
           <div className="card overflow-hidden">
             <div className="px-4 py-3 border-b border-[rgba(255,255,255,0.05)]">
-              <h3 className="text-[13px] font-semibold text-[#dbe1ec]">
+              <h3 className="text-[13px] font-semibold text-[#F2F2F3]">
                 Riwayat putus-nyambung
               </h3>
-              <p className="text-[11px] text-[#7c8798] mt-0.5">
+              <p className="text-[11px] text-[#8B8D93] mt-0.5">
                 Dicatat otomatis setiap kali status berubah
               </p>
             </div>
             {!data || data.history.length === 0 ? (
-              <p className="p-8 text-center text-[13px] text-[#7c8798]">
+              <p className="p-8 text-center text-[13px] text-[#8B8D93]">
                 Belum ada riwayat. Status saat ini dicatat sebagai titik awal.
               </p>
             ) : (
@@ -278,7 +278,7 @@ export default function ConnectionPage() {
                     >
                       <span
                         className="shrink-0"
-                        style={{ color: on ? '#6fd9b8' : '#f295aa' }}
+                        style={{ color: on ? '#3ED28C' : '#E8604A' }}
                       >
                         {on ? <IconPlug size={14} /> : <IconUnplug size={14} />}
                       </span>
@@ -287,16 +287,16 @@ export default function ConnectionPage() {
                       >
                         {on ? 'connected' : 'disconnected'}
                       </span>
-                      <span className="mono text-[11px] text-[#9aa4b3] hidden sm:inline shrink-0">
+                      <span className="mono text-[11px] text-[#8B8D93] hidden sm:inline shrink-0">
                         {e.ipv4_address || '—'}
                       </span>
                       {e.reason && (
-                        <span className="text-[11px] text-[#f295aa]/80 truncate flex-1" title={e.reason}>
+                        <span className="text-[11px] text-[#E8604A]/80 truncate flex-1" title={e.reason}>
                           {e.reason}
                         </span>
                       )}
                       <span
-                        className="text-[11px] text-[#5d6675] shrink-0 ml-auto"
+                        className="text-[11px] text-[#58585F] shrink-0 ml-auto"
                         title={fmtTime(e.at)}
                       >
                         {fmtTime(e.at)}

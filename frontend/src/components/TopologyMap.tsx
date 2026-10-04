@@ -68,8 +68,8 @@ const Node = memo(function Node({
         <circle r={30} fill="transparent" />
         <circle
           r={17}
-          fill={kicked ? 'rgba(242,113,139,0.16)' : 'var(--color-base-850)'}
-          stroke={kicked ? '#f2718b' : 'var(--color-base-600)'}
+          fill={kicked ? 'rgba(232,96,74,0.16)' : 'var(--color-surface)'}
+          stroke={kicked ? '#E8604A' : 'var(--color-border)'}
           strokeWidth={kicked ? 2 : 1}
           // Dashed ring marks a device that is being blocked.
           strokeDasharray={kicked ? '4 3' : undefined}
@@ -80,8 +80,8 @@ const Node = memo(function Node({
         <circle
           cy={-2}
           r={5}
-          fill={offline ? 'none' : '#46c9a2'}
-          stroke={offline ? '#6b7484' : 'none'}
+          fill={offline ? 'none' : '#3ED28C'}
+          stroke={offline ? '#8B8D93' : 'none'}
           strokeWidth={1.5}
           opacity={offline ? 0.8 : 1}
           style={{ pointerEvents: 'none' }}
@@ -90,7 +90,7 @@ const Node = memo(function Node({
           y={34}
           textAnchor="middle"
           fontSize={11}
-          fill={offline ? '#6b7484' : '#98a3b4'}
+          fill={offline ? '#8B8D93' : '#8B8D93'}
           opacity={offline ? 0.7 : 1}
           style={{ pointerEvents: 'none' }}
         >
@@ -100,7 +100,7 @@ const Node = memo(function Node({
           y={46}
           textAnchor="middle"
           fontSize={10}
-          fill="#5d6675"
+          fill="#58585F"
           style={{ pointerEvents: 'none' }}
         >
           {d.ip || d.mac}
@@ -140,21 +140,21 @@ export default function TopologyMap({ devices, routerName, gatewayMac }: Props) 
             {kicked > 0 ? ` · ${kicked} di-kick` : ''}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#7c8798]">
+        <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#8B8D93]">
           <span className="inline-flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#46c9a2' }} />
+            <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#3ED28C' }} />
             Online
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#5b6472' }} />
+            <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#58585F' }} />
             Offline
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span
               className="w-2.5 h-2.5 rounded-full"
               style={{
-                background: 'rgba(242,113,139,0.35)',
-                border: '1px dashed #f2718b',
+                background: 'rgba(232,96,74,0.35)',
+                border: '1px dashed #E8604A',
               }}
             />
             Di-kick
@@ -181,7 +181,7 @@ export default function TopologyMap({ devices, routerName, gatewayMac }: Props) 
                 y1={CY}
                 x2={p.x}
                 y2={p.y}
-                stroke={d.kicked != null ? '#f2718b' : offline ? '#2a3242' : '#3a4459'}
+                stroke={d.kicked != null ? '#E8604A' : offline ? '#2A2A2F' : '#33333A'}
                 strokeWidth={1}
                 // Dashed link for a blocked device, matching its node ring.
                 strokeDasharray={d.kicked != null ? '4 4' : undefined}
@@ -192,21 +192,21 @@ export default function TopologyMap({ devices, routerName, gatewayMac }: Props) 
 
           {/* Router hub. */}
           <g transform={`translate(${CX} ${CY})`}>
-            <circle r={52} fill="rgba(91,124,240,0.07)" />
-            <circle r={36} fill="var(--color-base-800)" stroke="var(--color-accent-500)" strokeWidth={2} />
+            <circle r={52} fill="rgba(139,141,147,0.07)" />
+            <circle r={36} fill="var(--color-surface2)" stroke="var(--color-accent)" strokeWidth={2} />
             <foreignObject x={-13} y={-13} width={26} height={26}>
-              <Router size={24} color="#9db4f7" />
+              <Router size={24} color="#8B8D93" />
             </foreignObject>
             <text
               y={72}
               textAnchor="middle"
               fontSize={13}
               fontWeight={700}
-              fill="#e9edf4"
+              fill="#F2F2F3"
             >
               {routerName}
             </text>
-            <text y={86} textAnchor="middle" fontSize={11} fill="#5d6675">
+            <text y={86} textAnchor="middle" fontSize={11} fill="#58585F">
               {gatewayMac}
             </text>
           </g>
@@ -223,12 +223,12 @@ export default function TopologyMap({ devices, routerName, gatewayMac }: Props) 
           <li key={d.mac}>
             <Link
               to={`/devices/${encodeURIComponent(d.mac)}`}
-              className="inline-flex items-center gap-2 rounded-[10px] border border-base-700 px-2 py-1 hover:border-base-600 transition"
+              className="inline-flex items-center gap-2 rounded-[10px] border border-border px-2 py-1 hover:border-border transition"
             >
               <DeviceTypeChip type={d.device_type} size={22} />
               <span
                 className={`text-[12px] ${
-                  d.online ? 'text-[#c9d3e2]' : 'text-[#6b7484]'
+                  d.online ? 'text-[#CFCFD4]' : 'text-[#8B8D93]'
                 }`}
               >
                 {displayName(d)}

@@ -186,9 +186,9 @@ export default function DeviceDetail() {
     return (
       <div className="card p-6 max-w-md">
         {err ? (
-          <p className="text-[#f295aa] text-sm">{err}</p>
+          <p className="text-[#E8604A] text-sm">{err}</p>
         ) : (
-          <p className="text-[#7c8798] text-sm">Memuat device…</p>
+          <p className="text-[#8B8D93] text-sm">Memuat device…</p>
         )}
         <button className="btn mt-4" onClick={() => nav('/devices')}>
           Kembali
@@ -217,7 +217,7 @@ export default function DeviceDetail() {
         <DeviceTypeChip type={shown.device_type} />
         <div className="min-w-0">
           <h1 className="section-title truncate">{displayName(shown)}</h1>
-          <div className="mono text-[#5d6675]">{shown.mac}</div>
+          <div className="mono text-[#58585F]">{shown.mac}</div>
         </div>
         {isKicked ? (
           <KickedPill started={liveKicked} />
@@ -230,7 +230,7 @@ export default function DeviceDetail() {
       </div>
 
       {err && (
-        <div className="card px-4 py-3 border-rose-500/35 bg-rose-500/[0.07] text-sm text-[#f295aa] mb-4">
+        <div className="card px-4 py-3 border-[rgba(232,96,74,0.32)] bg-[rgba(232,96,74,0.07)] text-sm text-[#E8604A] mb-4">
           {err}
         </div>
       )}
@@ -267,7 +267,7 @@ export default function DeviceDetail() {
               ever used, so a single-interface summary would be misleading. */}
           {targeted.length > 0 && (
             <div className="mt-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5d6675] mb-1.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#58585F] mb-1.5">
                 SSID yang di blokir ({blocked.length}/{targeted.length})
               </div>
               <ul className="space-y-1">
@@ -278,8 +278,8 @@ export default function DeviceDetail() {
                       <span className={`badge ${ok ? 'badge-online' : 'badge-kicked'}`}>
                         {ok ? 'blocked' : 'gagal'}
                       </span>
-                      <code className="mono text-[#b6bfcd]">{iface}</code>
-                      <span className="text-[11px] text-[#5d6675]">
+                      <code className="mono text-[#8B8D93]">{iface}</code>
+                      <span className="text-[11px] text-[#58585F]">
                         {ssidLabelFor(iface)}
                       </span>
                     </li>
@@ -287,14 +287,14 @@ export default function DeviceDetail() {
                 })}
               </ul>
               {failed.length > 0 && (
-                <p className="text-[11px] text-[#e0bb63] mt-2 leading-relaxed">
+                <p className="text-[11px] text-[#E7B34A] mt-2 leading-relaxed">
                   {failed.join(' · ')}
                 </p>
               )}
               {/* Roaming warning: history says this device uses more APs than
                   we managed to block, so it can still rejoin on one of them. */}
               {targeted.length > blocked.length && (
-                <p className="text-[11px] text-[#e0bb63] mt-2 leading-relaxed">
+                <p className="text-[11px] text-[#E7B34A] mt-2 leading-relaxed">
                   Device ini pernah terlihat di {targeted.length} SSID, tapi hanya{' '}
                   {blocked.length} yang berhasil diblokir. Kalau device pindah ke
                   SSID yang gagal, blokir tidak berlaku — ulangi Kick saat
@@ -315,7 +315,7 @@ export default function DeviceDetail() {
             <Row k="Hostname" v={device.hostname || '-'} />
             <Row k="Vendor" v={device.vendor || 'Tidak diketahui'} />
             <Row k="Tipe" v={TYPE_LABEL[device.device_type] || device.device_type} />
-            <div className="border-t border-base-700/70 pt-3">
+            <div className="border-t border-border/70 pt-3">
               <Row k="Pertama terlihat" v={fmtTime(device.first_seen)} />
             </div>
             <Row k="Terakhir terlihat" v={fmtAge(device.last_seen)} />
@@ -337,7 +337,7 @@ export default function DeviceDetail() {
             </button>
           </div>
 
-          <label className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5d6675] mt-4 mb-1.5">
+          <label className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#58585F] mt-4 mb-1.5">
             Tipe device
           </label>
           <select
@@ -357,11 +357,11 @@ export default function DeviceDetail() {
               </option>
             ))}
           </select>
-          <p className="text-[11px] text-[#5d6675] mt-1.5">
+          <p className="text-[11px] text-[#58585F] mt-1.5">
             {shown.type_override ? (
               <>
                 Diatur manual. Deteksi otomatis menebak{' '}
-                <span className="text-[#7c8798]">
+                <span className="text-[#8B8D93]">
                   {TYPE_LABEL[shown.guessed_type] || shown.guessed_type}
                 </span>
                 .
@@ -372,14 +372,14 @@ export default function DeviceDetail() {
           </p>
 
           {shown.randomized_mac && (
-            <p className="text-[11px] text-[#5d6675] mt-1.5">
+            <p className="text-[11px] text-[#58585F] mt-1.5">
               MAC acak (private), jadi vendor tidak bisa dibaca dari OUI.
             </p>
           )}
 
           {!shown.type_confident && (
             <div className="rounded-[12px] border border-amber-400/25 bg-amber-400/[0.06] px-3 py-2.5 mt-3">
-              <div className="text-[11px] text-[#e0bb63] leading-relaxed">
+              <div className="text-[11px] text-[#E7B34A] leading-relaxed">
                 Tipe <strong>tidak bisa dipastikan</strong> otomatis. Device ini tidak
                 mengirim hostname DHCP dan memakai MAC acak, jadi tidak ada sumber
                 data yang bisa menandainya sebagai Apple device (iPhone/iPad/Mac),
@@ -390,7 +390,7 @@ export default function DeviceDetail() {
             </div>
           )}
 
-          <div className="border-t border-base-700/70 mt-5 pt-5">
+          <div className="border-t border-border/70 mt-5 pt-5">
             <h2 className="card-title mb-3">Kontrol Kick</h2>
             <input
               className="input mb-3"
@@ -407,22 +407,22 @@ export default function DeviceDetail() {
                 Kick device ini
               </button>
             )}
-            <p className="text-[11px] text-[#5d6675] mt-3 leading-relaxed">
-              Blokir <strong className="text-[#98a3b4]">permanen</strong> dilakukan di
+            <p className="text-[11px] text-[#58585F] mt-3 leading-relaxed">
+              Blokir <strong className="text-[#8B8D93]">permanen</strong> dilakukan di
               router (WLAN Advanced → Access Control Rule): device tidak akan bisa
               konek lagi sampai kamu tekan Hentikan Kick. Efek{' '}
-              <strong className="text-[#98a3b4]">putus instan</strong> memakai ARP spoof,
+              <strong className="text-[#8B8D93]">putus instan</strong> memakai ARP spoof,
               dan bisa saja tidak berlaku di semua perangkat — terutama iOS/Android
               modern yang menoleransi ARP spoofing.
               <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                <span className="text-[#5d6675]">SSID:</span>
+                <span className="text-[#58585F]">SSID:</span>
                 {/* The interface comes from the router's WLAN client table, so
                     it is the AP the device is really on - not a default. */}
-                <code className="mono text-[#b6bfcd]">
+                <code className="mono text-[#8B8D93]">
                   {shown.ssid_name || (shown.wifi_interface || '-')}
                 </code>
                 {shown.wifi_interface && (
-                  <span className="mono text-[#5d6675]">({shown.wifi_interface})</span>
+                  <span className="mono text-[#58585F]">({shown.wifi_interface})</span>
                 )}
                 {report?.interface_source === 'auto' && (
                   <span className="badge badge-online">terdeteksi otomatis</span>
@@ -435,7 +435,7 @@ export default function DeviceDetail() {
                 )}
               </div>
               {report?.interface_source === 'fallback' && (
-                <div className="text-[#e0bb63] mt-1">
+                <div className="text-[#E7B34A] mt-1">
                   Router tidak melaporkan AP untuk device ini, jadi memakai
                   default. Jika device sebenarnya di SSID lain, blokir tidak akan
                   berlaku — pilih AP di bawah.
@@ -444,7 +444,7 @@ export default function DeviceDetail() {
 
               {/* Manual AP override. Auto-detection normally gets this right;
                   this is for when the router reports the wrong AP (or none). */}
-              <label className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5d6675] mt-3 mb-1.5">
+              <label className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#58585F] mt-3 mb-1.5">
                 AP untuk blokir
               </label>
               <select
@@ -463,12 +463,12 @@ export default function DeviceDetail() {
                   </option>
                 ))}
               </select>
-              <p className="text-[11px] text-[#5d6675] mt-1.5">
+              <p className="text-[11px] text-[#58585F] mt-1.5">
                 Rule Access Control hanya berlaku di AP yang dipilih. Pilih yang
                 salah = blokir gagal diam-diam.
               </p>
               {device.is_gateway && (
-                <div className="text-[#5d6675] mt-1">Gateway tidak bisa di-kick.</div>
+                <div className="text-[#58585F] mt-1">Gateway tidak bisa di-kick.</div>
               )}
             </p>
           </div>
@@ -488,7 +488,7 @@ export default function DeviceDetail() {
           <div
             className="rounded-[12px] border border-amber-400/25 bg-amber-400/[0.06] px-3 py-2.5 mt-4"
           >
-            <div className="text-[11px] text-[#e0bb63] leading-relaxed">
+            <div className="text-[11px] text-[#E7B34A] leading-relaxed">
               Total pemakaian data per device <strong>tidak tersedia</strong> di router
               ini. Firmware ZTE F670L hanya mengekspos laju sesaat (bps) di atas —
               tidak ada penghitung byte kumulatif per klien di seluruh panel admin.
@@ -501,23 +501,23 @@ export default function DeviceDetail() {
         <div className="card p-5">
           <h2 className="card-title mb-4">Riwayat kick</h2>
           {kickLog.length === 0 ? (
-            <p className="text-xs text-[#7c8798]">Belum pernah di-kick.</p>
+            <p className="text-xs text-[#8B8D93]">Belum pernah di-kick.</p>
           ) : (
             <ul className="space-y-3 text-xs max-h-64 overflow-y-auto pr-1">
               {kickLog.map((k) => (
                 <li
                   key={k.id}
-                  className="border-l-2 border-[#2e374a] pl-3 hover:border-[#3a4459] transition"
+                  className="border-l-2 border-[#2A2A2F] pl-3 hover:border-[#33333A] transition"
                 >
                   <div className="flex items-center gap-2">
                     {k.active && <span className="badge badge-kicked">aktif</span>}
-                    <span className="text-[#98a3b4]">{fmtTime(k.at)}</span>
+                    <span className="text-[#8B8D93]">{fmtTime(k.at)}</span>
                   </div>
-                  <div className="text-[#5d6675] mt-0.5">
+                  <div className="text-[#58585F] mt-0.5">
                     oleh {k.actor || '-'} ·{' '}
                     {k.active ? 'berjalan' : fmtDuration(k.duration)}
                   </div>
-                  {k.reason && <div className="text-[#7c8798] mt-0.5">{k.reason}</div>}
+                  {k.reason && <div className="text-[#8B8D93] mt-0.5">{k.reason}</div>}
                 </li>
               ))}
             </ul>
@@ -541,8 +541,8 @@ export default function DeviceDetail() {
                 >
                   <defs>
                     <linearGradient id="gUptime" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#46c9a2" stopOpacity={0.38} />
-                      <stop offset="100%" stopColor="#46c9a2" stopOpacity={0} />
+                      <stop offset="0%" stopColor="#3ED28C" stopOpacity={0.38} />
+                      <stop offset="100%" stopColor="#3ED28C" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -573,8 +573,8 @@ export default function DeviceDetail() {
                     labelFormatter={(v) => fmtTime(String(v))}
                     formatter={() => []}
                     contentStyle={{
-                      background: '#161b27',
-                      border: '1px solid #2e374a',
+                      background: '#17171B',
+                      border: '1px solid #2A2A2F',
                       borderRadius: 12,
                       fontSize: 12,
                     }}
@@ -584,7 +584,7 @@ export default function DeviceDetail() {
                   <Area
                     type="stepAfter"
                     dataKey="online"
-                    stroke="#46c9a2"
+                    stroke="#3ED28C"
                     strokeWidth={2}
                     fill="url(#gUptime)"
                   />
@@ -592,7 +592,7 @@ export default function DeviceDetail() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="text-xs text-[#7c8798] py-8 text-center">
+            <p className="text-xs text-[#8B8D93] py-8 text-center">
               Belum ada cukup riwayat untuk menggambar grafik.
             </p>
           )}
@@ -617,14 +617,14 @@ export default function DeviceDetail() {
               <tbody>
                 {events.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="text-center text-[#7c8798] py-8">
+                    <td colSpan={3} className="text-center text-[#8B8D93] py-8">
                       Belum ada riwayat.
                     </td>
                   </tr>
                 )}
                 {events.map((e, i) => (
                   <tr key={`${e.at}-${i}`}>
-                    <td className="text-[#98a3b4]">{fmtTime(e.at)}</td>
+                    <td className="text-[#8B8D93]">{fmtTime(e.at)}</td>
                     <td>
                       <span
                         className={`badge ${e.kind === 'online' ? 'badge-online' : 'badge-offline'}`}
@@ -632,7 +632,7 @@ export default function DeviceDetail() {
                         {e.kind === 'online' ? 'Online' : 'Offline'}
                       </span>
                     </td>
-                    <td className="mono text-[#7c8798]">{e.ip}</td>
+                    <td className="mono text-[#8B8D93]">{e.ip}</td>
                   </tr>
                 ))}
               </tbody>
@@ -668,17 +668,17 @@ function ResultHalf({
     <div
       className="rounded-[12px] border px-3 py-2.5"
       style={{
-        background: ok ? 'rgba(70,201,162,0.06)' : 'rgba(242,113,139,0.06)',
-        borderColor: ok ? 'rgba(70,201,162,0.2)' : 'rgba(242,113,139,0.22)',
+        background: ok ? 'rgba(62,210,140,0.06)' : 'rgba(232,96,74,0.06)',
+        borderColor: ok ? 'rgba(62,210,140,0.2)' : 'rgba(232,96,74,0.22)',
       }}
     >
       <div className="flex items-center gap-2">
         <span className={`badge ${ok ? 'badge-online' : 'badge-kicked'}`}>
           {ok ? 'berhasil' : 'gagal'}
         </span>
-        <span className="text-[13px] text-[#dbe1ec] font-medium">{title}</span>
+        <span className="text-[13px] text-[#F2F2F3] font-medium">{title}</span>
       </div>
-      <div className="text-[11px] text-[#7c8798] mt-1 break-words">{detail}</div>
+      <div className="text-[11px] text-[#8B8D93] mt-1 break-words">{detail}</div>
     </div>
   )
 }
@@ -686,8 +686,8 @@ function ResultHalf({
 function Row({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
   return (
     <div className="flex justify-between gap-3">
-      <dt className="text-[#5d6675] shrink-0">{k}</dt>
-      <dd className={`text-right text-[#b6bfcd] ${mono ? 'mono' : ''}`}>{v}</dd>
+      <dt className="text-[#58585F] shrink-0">{k}</dt>
+      <dd className={`text-right text-[#8B8D93] ${mono ? 'mono' : ''}`}>{v}</dd>
     </div>
   )
 }

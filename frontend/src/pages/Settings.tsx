@@ -88,7 +88,7 @@ export default function SettingsPage() {
 
   if (!s) {
     return (
-      <div className="card p-6 text-sm text-slate-500">
+      <div className="card p-6 text-sm text-muted2">
         {err ?? 'Memuat settings…'}
       </div>
     )
@@ -106,12 +106,12 @@ export default function SettingsPage() {
       />
 
       {msg && (
-        <div className="card px-4 py-3 border-emerald-400/30 bg-emerald-400/[0.07] text-sm text-[#6fd9b8] mb-4">
+        <div className="card px-4 py-3 border-[rgba(62,210,140,0.28)] bg-[rgba(62,210,140,0.07)] text-sm text-[#3ED28C] mb-4">
           {msg}
         </div>
       )}
       {err && (
-        <div className="card px-4 py-3 border-rose-400/30 bg-rose-400/[0.07] text-sm text-[#f295aa] mb-4">
+        <div className="card px-4 py-3 border-[rgba(232,96,74,0.3)] bg-[rgba(232,96,74,0.07)] text-sm text-[#E8604A] mb-4">
           {err}
         </div>
       )}
@@ -168,18 +168,18 @@ export default function SettingsPage() {
             server dijalankan ulang dengan &ldquo;Run as Administrator&rdquo;.
           </div>
         ) : net?.is_admin ? (
-          <div className="rounded-[12px] border border-emerald-400/30 bg-emerald-400/[0.07] px-3 py-2.5 text-sm text-[#6fd9b8]">
+          <div className="rounded-[12px] border border-[rgba(62,210,140,0.28)] bg-[rgba(62,210,140,0.07)] px-3 py-2.5 text-sm text-[#3ED28C]">
             Backend berjalan dengan hak Administrator — spoof bisa dikirim.
           </div>
         ) : null}
 
         <div className="text-sm">
-          <div className="text-slate-400 text-xs uppercase tracking-wider mb-1.5">
+          <div className="text-muted text-xs uppercase tracking-wider mb-1.5">
             Adapter yang dipakai
           </div>
-          <div className="mono text-slate-200">
+          <div className="mono text-ink">
             {net?.chosen?.name ?? '—'}{' '}
-            <span className="text-slate-500">
+            <span className="text-muted2">
               {net?.chosen?.ip ?? 'tanpa IP'} · {net?.chosen?.mac ?? '—'}
             </span>
           </div>
@@ -187,7 +187,7 @@ export default function SettingsPage() {
 
         {net?.interfaces && net.interfaces.length > 0 && (
           <div>
-            <div className="text-slate-400 text-xs uppercase tracking-wider mb-1.5">
+            <div className="text-muted text-xs uppercase tracking-wider mb-1.5">
               Semua adapter
             </div>
             <ul className="space-y-1 text-xs">
@@ -204,8 +204,8 @@ export default function SettingsPage() {
                   >
                     {i.name === net.chosen?.name ? 'dipakai' : i.is_virtual ? 'virtual' : 'tersedia'}
                   </span>
-                  <span className="text-slate-300">{i.name}</span>
-                  <span className="mono text-slate-500">{i.ip ?? '-'}</span>
+                  <span className="text-ink">{i.name}</span>
+                  <span className="mono text-muted2">{i.ip ?? '-'}</span>
                   {i.is_default && (
                     <span className="text-amber-400">
                       · default scapy (berisiko; diabaikan aplikasi)
@@ -217,7 +217,7 @@ export default function SettingsPage() {
           </div>
         )}
 
-        <p className="text-[11px] text-[#5d6675] leading-relaxed">
+        <p className="text-[11px] text-[#58585F] leading-relaxed">
           Aplikasi ini selalu mengirim lewat adapter yang memegang IP lokal kamu, bukan
           default scapy — di mesin dengan VMware/VirtualBox, default scapy bisa
           menunjuk adapter virtual sehingga frame tidak pernah sampai ke LAN.
@@ -254,7 +254,7 @@ export default function SettingsPage() {
         </Field>
 
         {!s.router_configured && (
-          <div className="rounded-[12px] border border-rose-400/30 bg-rose-400/[0.07] px-3 py-2.5 text-sm text-[#f295aa] mb-4">
+          <div className="rounded-[12px] border border-[rgba(232,96,74,0.3)] bg-[rgba(232,96,74,0.07)] px-3 py-2.5 text-sm text-[#E8604A] mb-4">
             <strong>Kredensial router tidak ditemukan.</strong>{' '}
             {s.env_file_found
               ? 'backend/.env ada tapi NETDASH_ROUTER_USER/PASS kosong di dalamnya.'
@@ -266,8 +266,8 @@ export default function SettingsPage() {
           <div
             className={`rounded-[12px] border px-3 py-2.5 text-sm ${
               router.reachable
-                ? 'border-emerald-400/30 bg-emerald-400/[0.07] text-[#6fd9b8]'
-                : 'border-rose-400/30 bg-rose-400/[0.07] text-[#f295aa]'
+                ? 'border-[rgba(62,210,140,0.28)] bg-[rgba(62,210,140,0.07)] text-[#3ED28C]'
+                : 'border-[rgba(232,96,74,0.3)] bg-[rgba(232,96,74,0.07)] text-[#E8604A]'
             }`}
           >
             {router.reachable ? 'Router terhubung.' : 'Router tidak bisa dihubungi.'}{' '}
@@ -365,11 +365,11 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5d6675] mb-1.5">
+      <label className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#58585F] mb-1.5">
         {label}
       </label>
       {children}
-      {hint && <p className="text-xs text-slate-500 mt-1.5">{hint}</p>}
+      {hint && <p className="text-xs text-muted2 mt-1.5">{hint}</p>}
     </div>
   )
 }

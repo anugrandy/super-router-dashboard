@@ -5,6 +5,13 @@
 *.pem
 *.key
 
+# DevTools network captures. A .har carries live session cookies, router
+# login tokens and page-token values verbatim.
+*.har
+*.har.gz
+*.saz
+*.mitm
+
 # --- Python ---
 __pycache__/
 *.py[cod]
@@ -26,8 +33,12 @@ htmlcov/
 
 # --- Node / frontend ---
 node_modules/
-frontend/dist/
-frontend/build/
+# All build output. run.ps1 moves a stale dist/ to dist.stale/ so it can no
+# longer be mistaken for a live bundle, and neither should ever be committed.
+# `dist*/` covers dist/, dist-ui/, dist.stale/ and every ad-hoc dist-<name>/
+# created while iterating. None of these is ever source.
+frontend/dist*/
+dist*/
 .vite/
 *.tsbuildinfo
 npm-debug.log*
@@ -49,6 +60,19 @@ data/
 logs/
 tmp/
 .temp/
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# Ad-hoc debug/probe scripts. The permanent regression suites are backend/
+# test_*.py and are tracked on purpose, so only the throwaway names are listed.
+patch_*.py
+probe_*.py
+scratch_*.py
+tmp_*.py
+*_scratch.py
+probe*.json
 
 # --- editor / OS ---
 .vscode/

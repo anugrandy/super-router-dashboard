@@ -62,15 +62,15 @@ export default function ActivityPage() {
             : undefined
         }
         actions={
-          <div className="flex gap-1 p-1 rounded-[10px] bg-base-900/60 border border-base-700">
+          <div className="flex gap-1 p-1 rounded-[10px] bg-bg/60 border border-border">
             {(['all', 'online', 'offline'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`px-3 py-1.5 rounded-lg text-[13px] font-medium capitalize transition ${
                   filter === f
-                    ? 'bg-accent-soft text-[#b7c8fb]'
-                    : 'text-[#7c8798] hover:text-[#dbe1ec] hover:bg-base-800'
+                    ? 'bg-surface2 text-[#F2F2F3]'
+                    : 'text-[#8B8D93] hover:text-[#F2F2F3] hover:bg-surface2'
                 }`}
               >
                 {f === 'all' ? 'Semua' : f === 'online' ? 'Online' : 'Offline'}
@@ -81,16 +81,16 @@ export default function ActivityPage() {
       />
 
       {err && (
-        <div className="card px-4 py-3 mb-4 border-rose-400/30 bg-rose-400/[0.07] text-sm text-[#f295aa]">
+        <div className="card px-4 py-3 mb-4 border-[rgba(232,96,74,0.3)] bg-[rgba(232,96,74,0.07)] text-sm text-[#E8604A]">
           {err}
         </div>
       )}
 
       <div className="card overflow-hidden">
         {events === null ? (
-          <p className="p-6 text-center text-[13px] text-[#7c8798]">Memuat…</p>
+          <p className="p-6 text-center text-[13px] text-[#8B8D93]">Memuat…</p>
         ) : rows.length === 0 ? (
-          <p className="p-10 text-center text-[13px] text-[#7c8798]">
+          <p className="p-10 text-center text-[13px] text-[#8B8D93]">
             Belum ada aktivitas{maybe(filter)} Devices yang sering connect-disconnect
             akan muncul di sini.
           </p>
@@ -106,18 +106,18 @@ export default function ActivityPage() {
                   <DeviceTypeChip type={e.device_type} size={28} />
                   <span
                     className="shrink-0"
-                    style={{ color: online ? '#6fd9b8' : '#f295aa' }}
+                    style={{ color: online ? '#3ED28C' : '#E8604A' }}
                     title={online ? 'Connect' : 'Disconnect'}
                   >
                     {online ? <IconPlug size={14} /> : <IconUnplug size={14} />}
                   </span>
                   <Link
                     to={`/devices/${encodeURIComponent(e.mac)}`}
-                    className="flex-1 min-w-0 text-[13px] text-[#dbe1ec] hover:text-[#9db4f7] truncate transition"
+                    className="flex-1 min-w-0 text-[13px] text-[#F2F2F3] hover:text-[#8B8D93] truncate transition"
                   >
                     {e.name}
                   </Link>
-                  <span className="mono text-[11px] text-[#7c8798] hidden sm:inline">
+                  <span className="mono text-[11px] text-[#8B8D93] hidden sm:inline">
                     {e.ip || '—'}
                   </span>
                   <span
@@ -126,7 +126,7 @@ export default function ActivityPage() {
                     {online ? 'connect' : 'disconnect'}
                   </span>
                   <span
-                    className="text-[11px] text-[#5d6675] shrink-0 w-24 text-right"
+                    className="text-[11px] text-[#58585F] shrink-0 w-24 text-right"
                     title={fmtTime(e.at)}
                   >
                     {fmtAge(e.at)}

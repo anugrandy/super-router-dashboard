@@ -2,13 +2,40 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth, useLive } from '../live'
 import { api } from '../api'
-import { UiDashboard, UiDevices, UiSettings, UiSearch, UiLogout, UiRefresh } from './icons'
+import {
+  UiDashboard,
+  UiDevices,
+  UiSettings,
+  UiSearch,
+  UiLogout,
+  UiRefresh,
+  UiMark,
+} from './icons'
 import { Gauge, Network, Activity, Globe } from 'lucide-react'
 import Toasts from './Toasts'
 
 const NavIcon = ({ children }: { children: React.ReactNode }) => (
   <span className="shrink-0">{children}</span>
 )
+
+/** Two-letter avatar tile used in the sidebar account card. */
+function InitialAvatar({ name }: { name: string | null }) {
+  const initials = (name || '?')
+    .split(/[\s_.-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0])
+    .join('')
+    .toUpperCase()
+  return (
+    <span
+      className="inline-flex items-center justify-center w-8 h-8 rounded-[9px] shrink-0 text-[12px] font-semibold"
+      style={{ background: 'rgba(231,179,74,0.14)', color: 'var(--color-accent)' }}
+    >
+      {initials || '?'}
+    </span>
+  )
+}
 
 /** One sidebar row. NavLink's isActive drives the accent highlight. */
 function Item({
@@ -28,7 +55,7 @@ function Item({
     >
       {({ isActive }) => (
         <>
-          <span style={{ color: isActive ? '#8fa8f8' : 'currentColor' }}>{icon}</span>
+          <span style={{ color: isActive ? '#F2F2F3' : 'currentColor' }}>{icon}</span>
           <span>{children}</span>
         </>
       )}
@@ -49,7 +76,15 @@ function SidebarSearch() {
 
   const routes = [
     { to: '/dashboard', label: 'Dashboard', hint: 'Ringkasan jaringan' },
+    { to: '/topology', label: 'Topologi', hint: 'Peta jaringan & router' },
     { to: '/devices', label: 'Devices', hint: 'Daftar semua perangkat' },
+    { to: '/activity', label: 'Aktivitas', hint: 'Riwayat konek & diskon' },
+    {
+      to: '/connection',
+      label: 'Koneksi Internet',
+      hint: 'Status WAN, IP, uptime',
+    },
+    { to: '/speedtest', label: 'Speedtest', hint: 'Uji bandwidth' },
     { to: '/settings', label: 'Settings', hint: 'Subnet, interface, router' },
   ]
   const hits = q.trim()
@@ -78,7 +113,7 @@ function SidebarSearch() {
   return (
     <div className="relative" ref={box}>
       <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#5d6675]">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted2">
           <UiSearch />
         </span>
         <input
@@ -91,11 +126,11 @@ function SidebarSearch() {
           onKeyDown={(e) => e.key === 'Enter' && submit()}
           placeholder="Cari menu…"
           aria-label="Cari menu"
-          className="w-full bg-base-900/70 border border-base-700 rounded-[10px] pl-9 pr-3 py-2 text-[13px] text-[#dbe1ec] placeholder:text-[#5d6675] outline-none transition focus:border-accent-500 focus:shadow-[0_0_0_3px_var(--color-accent-soft)]"
+          className="w-full bg-bg border border-border rounded-[9px] pl-9 pr-3 py-2 text-[13px] text-ink placeholder:text-muted2 outline-none transition focus:border-[#3a3a40]"
         />
       </div>
       {open && hits.length > 0 && (
-        <div className="absolute z-30 mt-1.5 w-full card p-1 shadow-xl">
+        <div className="absolute z-30 mt-1.5 w-full card p-1">
           {hits.map((r) => (
             <button
               key={r.to}
@@ -104,10 +139,10 @@ function SidebarSearch() {
                 setOpen(false)
                 setQ('')
               }}
-              className="w-full text-left px-2.5 py-2 rounded-[9px] hover:bg-base-800 transition"
+              className="w-full text-left px-2.5 py-2 rounded-[8px] hover:bg-surface2 transition"
             >
-              <div className="text-[13px] text-[#dbe1ec]">{r.label}</div>
-              <div className="text-[11px] text-[#6b7484]">{r.hint}</div>
+              <div className="text-[13px] text-[#F2F2F3]">{r.label}</div>
+              <div className="text-[11px] text-[#8B8D93]">{r.hint}</div>
             </button>
           ))}
         </div>
@@ -126,20 +161,25 @@ export default function Layout({ children }: { children: ReactNode }) {
       {/* Sidebar: the darkest plane in the app, so the content area reads as
           a lighter surface sitting next to it. */}
       <aside
-        className="w-60 shrink-0 border-r border-base-700/70"
-        style={{ background: 'var(--color-base-950)' }}
+        className="w-[248px] shrink-0 border-r border-border"
+        style={{ background: 'var(--color-surface)' }}
       >
-        <div className="sticky top-0 h-screen flex flex-col px-3.5 py-4">
-          <div className="flex items-center gap-2.5 px-1.5 mb-5">
-            <span className="inline-flex items-center justify-center w-8 h-8 rounded-[10px] bg-accent-600/90 text-white">
-              <UiDashboard />
+        <div className="sticky top-0 h-screen flex flex-col px-4 py-5">
+          <div className="flex items-center gap-2.5 px-1 mb-6">
+            <span
+              className="inline-flex items-center justify-center w-8 h-8 rounded-[7px]"
+              style={{ background: 'var(--color-accent)', color: '#17130a' }}
+            >
+              <UiMark />
             </span>
-            <span className="font-semibold tracking-tight text-[15px]">AN Telemetry</span>
+            <span className="font-display font-bold tracking-tight text-[15px]">
+              AN Telemetry
+            </span>
           </div>
 
           <SidebarSearch />
 
-          <nav className="mt-5 space-y-1">
+          <nav className="mt-6 space-y-0.5">
             <Item to="/dashboard" icon={<UiDashboard />}>
               Dashboard
             </Item>
@@ -163,20 +203,31 @@ export default function Layout({ children }: { children: ReactNode }) {
             </Item>
           </nav>
 
-          <div className="mt-auto space-y-3">
-            <div className="px-1.5">
-              <div
-                className={`badge ${connected ? 'badge-online badge-pulse' : 'badge-offline'}`}
-                title={connected ? 'Live update aktif' : 'Koneksi live terputus'}
-              >
-                {connected ? 'Live' : 'Offline'}
+          {/* Account card: avatar, name, live state and sign-out together, as
+              one bordered unit rather than loose rows of text. */}
+          <div className="mt-auto">
+            <div className="flex items-center gap-2.5 rounded-[10px] border border-border bg-surface2 px-2.5 py-2">
+              <InitialAvatar name={username} />
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] text-ink truncate leading-tight">
+                  {username}
+                </div>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{
+                      background: connected ? 'var(--color-green)' : 'var(--color-muted2)',
+                    }}
+                  />
+                  <span className="text-[11px] text-muted">
+                    {connected ? 'Live' : 'Offline'}
+                  </span>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2 px-1.5">
-              <span className="flex-1 text-[13px] text-[#98a3b4] truncate">{username}</span>
               <button
-                className="btn btn-ghost !px-2 !py-1.5"
+                className="shrink-0 text-muted hover:text-ink transition p-1"
                 title="Keluar"
+                aria-label="Keluar"
                 onClick={async () => {
                   await logout()
                   nav('/login', { replace: true })
@@ -190,7 +241,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="flex-1 min-w-0 relative z-[1]">
-        <div className="max-w-7xl mx-auto px-6 py-6">{children}</div>
+        <div className="max-w-[1400px] mx-auto px-8 py-7">{children}</div>
       </main>
 
       {/* Live connect/disconnect toasts. Subscribes to the transitions pub/sub
@@ -232,7 +283,7 @@ export function PageHeader({
   actions?: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 mb-5">
+    <div className="flex flex-wrap items-center gap-3 mb-6">
       <div className="min-w-0">
         <h1 className="section-title">{title}</h1>
         {subtitle && <div className="card-sub mt-0.5">{subtitle}</div>}

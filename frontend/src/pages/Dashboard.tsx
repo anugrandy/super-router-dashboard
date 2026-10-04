@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  Area,
-  AreaChart,
+  Bar,
   CartesianGrid,
+  ComposedChart,
+  Line,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -24,7 +26,6 @@ import {
   IconPlug,
   IconUnplug,
   STAT_ICON,
-  STAT_TINT,
 } from '../components/icons'
 import { useWanEvent } from '../components/Toasts'
 import { useLive } from '../live'
@@ -57,6 +58,13 @@ export default function DashboardPage() {
       ? data.chart
       : [{ at: new Date().toISOString(), online: 0, total: 0 }]
 
+  // Capacity ceiling for the dashed rule: a round step above the highest count
+  // seen in the window, so the line always sits inside the plot.
+  const chartMax = Math.max(
+    4,
+    Math.ceil(Math.max(online, ...chart.map((c) => c.total ?? 0)) / 4) * 4,
+  )
+
   const types = Object.entries(data?.by_type ?? {}).sort((a, b) => b[1] - a[1])
 
   // Trend for the stat cards: compare the first and last sample in the window
@@ -81,7 +89,7 @@ export default function DashboardPage() {
         subtitle={
           <>
             {data?.gateway.subnet ?? '—'}
-            <span className="mx-2 text-[#4a5265]">|</span>
+            <span className="mx-2 text-[#58585F]">|</span>
             {connected ? 'update realtime aktif' : 'menunggu koneksi live'}
           </>
         }
@@ -89,7 +97,7 @@ export default function DashboardPage() {
       />
 
       {err && (
-        <div className="card px-4 py-3 border-rose-500/35 bg-rose-500/[0.07] text-sm text-[#f295aa] mb-5">
+        <div className="card px-4 py-3 border-[rgba(232,96,74,0.32)] bg-[rgba(232,96,74,0.07)] text-sm text-[#E8604A] mb-5">
           {err}
         </div>
       )}
@@ -139,34 +147,28 @@ export default function DashboardPage() {
               Tendensi jumlah device online dari hasil scan terakhir
             </p>
           </div>
-          <div className="flex items-center gap-3 text-[11px] text-[#7c8798]">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-accent-500" />
-              Online
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#a78bfa]" />
-              Total device
-            </span>
+          <div className="flex items-center gap-3">
+            <span className="text-[13px] text-green">{online}</span>
+            <span className="text-[12px] text-muted2">/ {chartMax} maks</span>
           </div>
         </div>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chart} margin={{ top: 6, right: 10, bottom: 0, left: -24 }}>
-              <defs>
-                {/* Gradient fill under the line: accent at the top fading to
-                    fully transparent at the baseline. */}
-                <linearGradient id="gOnline" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#5b7cf0" stopOpacity={0.4} />
-                  <stop offset="60%" stopColor="#5b7cf0" stopOpacity={0.12} />
-                  <stop offset="100%" stopColor="#5b7cf0" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="gTotal" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#a78bfa" stopOpacity={0.18} />
-                  <stop offset="100%" stopColor="#a78bfa" stopOpacity={0} />
-                </linearGradient>
-              </defs>
+            <ComposedChart data={chart} margin={{ top: 6, right: 10, bottom: 0, left: -24 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              {/* Capacity reference: a flat dashed rule so the live count can
+                  be read against the ceiling at a glance. */}
+              <ReferenceLine
+                y={chartMax}
+                stroke="#2f2f35"
+                strokeDasharray="4 4"
+                label={{
+                  value: 'kapasitas',
+                  position: 'insideTopRight',
+                  fill: '#58585F',
+                  fontSize: 10,
+                }}
+              />
               <XAxis
                 dataKey="at"
                 tickLine={false}
@@ -189,29 +191,22 @@ export default function DashboardPage() {
                 cursor={{ stroke: 'rgba(255,255,255,0.14)', strokeWidth: 1 }}
                 labelFormatter={(v) => fmtTime(String(v))}
                 contentStyle={{
-                  background: '#161b27',
-                  border: '1px solid #2e374a',
-                  borderRadius: 12,
+                  background: '#17171B',
+                  border: '1px solid #232327',
+                  borderRadius: 10,
                   fontSize: 12,
                 }}
               />
-              <Area
-                type="monotone"
-                dataKey="total"
-                stroke="#a78bfa"
-                strokeWidth={1.5}
-                strokeDasharray="4 4"
-                fill="url(#gTotal)"
-              />
-              <Area
+              <Bar dataKey="online" fill="#1e1e22" radius={[3, 3, 0, 0]} maxBarSize={22} />
+              <Line
                 type="monotone"
                 dataKey="online"
-                stroke="#5b7cf0"
-                strokeWidth={2.2}
-                fill="url(#gOnline)"
-                activeDot={{ r: 4, fill: '#5b7cf0', stroke: '#0b0f18', strokeWidth: 2 }}
+                stroke="#3ED28C"
+                strokeWidth={2}
+                dot={{ r: 2.5, fill: '#3ED28C', strokeWidth: 0 }}
+                activeDot={{ r: 4.5, fill: '#3ED28C', stroke: '#0A0A0B', strokeWidth: 2 }}
               />
-            </AreaChart>
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>
@@ -225,10 +220,10 @@ export default function DashboardPage() {
                 <li key={d.mac}>
                   <Link
                     to={`/devices/${encodeURIComponent(d.mac)}`}
-                    className="flex items-center gap-3 rounded-[10px] px-2 py-2 -mx-2 hover:bg-base-800/70 transition"
+                    className="flex items-center gap-3 rounded-[10px] px-2 py-2 -mx-2 hover:bg-surface2/70 transition"
                   >
                     <DeviceTypeChip type={d.device_type} />
-                    <span className="flex-1 min-w-0 truncate text-sm text-[#dbe1ec] hover:text-[#9db4f7]">
+                    <span className="flex-1 min-w-0 truncate text-sm text-[#F2F2F3] hover:text-[#8B8D93]">
                       {displayName(d)}
                     </span>
                     <span
@@ -241,7 +236,7 @@ export default function DashboardPage() {
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-[#7c8798]">Belum ada data.</p>
+            <p className="text-xs text-[#8B8D93]">Belum ada data.</p>
           )}
         </div>
 
@@ -252,18 +247,18 @@ export default function DashboardPage() {
               {types.map(([type, n]) => (
                 <li
                   key={type}
-                  className="flex items-center gap-3 rounded-[10px] px-2 py-2 -mx-2 hover:bg-base-800/70 transition"
+                  className="flex items-center gap-3 rounded-[10px] px-2 py-2 -mx-2 hover:bg-surface2/70 transition"
                 >
                   <DeviceTypeChip type={type} />
-                  <span className="flex-1 text-sm text-[#b6bfcd]">
+                  <span className="flex-1 text-sm text-[#8B8D93]">
                     {TYPE_LABEL[type] || type}
                   </span>
-                  <span className="mono text-[#7c8798]">{n}</span>
+                  <span className="mono text-[#8B8D93]">{n}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-[#7c8798]">Belum ada device online.</p>
+            <p className="text-xs text-[#8B8D93]">Belum ada device online.</p>
           )}
         </div>
 
@@ -274,16 +269,16 @@ export default function DashboardPage() {
               {data.kick_log.slice(0, 8).map((k) => (
                 <li
                   key={k.id}
-                  className="flex items-start justify-between gap-2 rounded-[10px] px-2 py-2 -mx-2 hover:bg-base-800/70 transition"
+                  className="flex items-start justify-between gap-2 rounded-[10px] px-2 py-2 -mx-2 hover:bg-surface2/70 transition"
                 >
-                  <span className="text-[#7c8798]">
+                  <span className="text-[#8B8D93]">
                     <Link
                       to={`/devices/${encodeURIComponent(k.mac)}`}
-                      className="mono hover:text-[#9db4f7]"
+                      className="mono hover:text-[#8B8D93]"
                     >
                       {k.mac}
                     </Link>
-                    <div className="text-[11px] text-[#5d6675]">
+                    <div className="text-[11px] text-[#58585F]">
                       {fmtTime(k.at)} · {k.actor || '-'}
                     </div>
                   </span>
@@ -294,7 +289,7 @@ export default function DashboardPage() {
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-[#7c8798]">Belum ada aksi kick.</p>
+            <p className="text-xs text-[#8B8D93]">Belum ada aksi kick.</p>
           )}
         </div>
       </div>
@@ -306,15 +301,8 @@ export default function DashboardPage() {
  *  the card surface without competing with the number. */
 function StatIcon({ kind }: { kind: 'total' | 'online' | 'offline' | 'kick' }) {
   const Ico = STAT_ICON[kind]
-  const tint = STAT_TINT[kind]
   return (
-    <span
-      className="inline-flex items-center justify-center w-9 h-9 rounded-[11px] shrink-0"
-      style={{ background: tint.bg, color: tint.fg }}
-      aria-hidden="true"
-    >
-      <Ico size={18} />
-    </span>
+    <Ico size={17} className="shrink-0 text-muted2 mt-0.5" aria-hidden="true" />
   )
 }
 
@@ -371,23 +359,23 @@ function Stat({
   const flat = Math.abs(trend ?? 0) < 0.5
   const valueColor =
     tone === 'danger'
-      ? 'text-[#f295aa]'
+      ? 'text-[#E8604A]'
       : tone === 'muted'
-        ? 'text-[#98a3b4]'
+        ? 'text-[#8B8D93]'
         : ''
 
   return (
     <div className="card card-hover p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#98a3b4]">
-            {label}
+          <div className="stat-label">{label}</div>
+          <div className={`stat-value mt-2.5 text-[2.125rem] ${valueColor}`}>
+            {value}
           </div>
-          <div className={`stat-value mt-2 text-[2.75rem] ${valueColor}`}>{value}</div>
         </div>
-        {icon && <div className="opacity-90">{icon}</div>}
+        {icon && <div>{icon}</div>}
       </div>
-      <div className="flex items-center gap-2 mt-3">
+      <div className="flex items-center gap-2 mt-3.5">
         {showTrend && (
           <span
             className={`badge ${
@@ -398,10 +386,12 @@ function Stat({
             {rising ? '↑' : '↓'} {Math.abs(trend!).toFixed(0)}%
           </span>
         )}
-        {note && <span className="text-[11px] text-[#7c8798]">{note}</span>}
+        {note && <span className="stat-caption">{note}</span>}
       </div>
       {showTrend && spanLabel && (
-        <div className="text-[10px] text-[#5d6675] mt-1.5">dibanding {spanLabel} lalu</div>
+        <div className="text-[11px] text-muted2 mt-1.5">
+          dibanding {spanLabel} lalu
+        </div>
       )}
     </div>
   )
@@ -435,7 +425,7 @@ function WanSummary() {
   if (!s) return null
 
   const up = s.ipv4_status === 'connected'
-  const color = !s.available ? '#7c8798' : up ? '#6fd9b8' : '#f295aa'
+  const color = !s.available ? '#8B8D93' : up ? '#3ED28C' : '#E8604A'
   const text = !s.available
     ? 'Router tidak terhubung'
     : up
@@ -451,7 +441,7 @@ function WanSummary() {
     <Link
       to="/connection"
       className="card card-hover px-4 py-3 mb-5 flex items-center gap-3 transition"
-      style={{ borderColor: up ? 'rgba(70,201,162,0.22)' : 'rgba(242,113,139,0.3)' }}
+      style={{ borderColor: up ? 'rgba(62,210,140,0.22)' : 'rgba(232,96,74,0.3)' }}
     >
       <span
         className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
@@ -463,9 +453,9 @@ function WanSummary() {
         <span className="block text-[13px] font-semibold" style={{ color }}>
           {text}
         </span>
-        <span className="block text-[11px] text-[#7c8798] truncate">{sub}</span>
+        <span className="block text-[11px] text-[#8B8D93] truncate">{sub}</span>
       </span>
-      <span className="text-[11px] text-[#5d6675] shrink-0 hidden sm:inline">
+      <span className="text-[11px] text-[#58585F] shrink-0 hidden sm:inline">
         Lihat detail
       </span>
     </Link>
