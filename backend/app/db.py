@@ -50,6 +50,27 @@ class Device(SQLModel, table=True):
     tx_bytes: int = 0
 
 
+class SpeedtestRun(SQLModel, table=True):
+    """History of manually triggered speedtests.
+
+    Rows are only written when a user presses the button - nothing samples this
+    on a timer, because a speedtest saturates the link.
+    """
+
+    __tablename__ = "speedtest_runs"
+
+    id: int | None = Field(default=None, primary_key=True)
+    at: datetime = Field(default_factory=utcnow, index=True)
+    download_mbps: float = 0.0
+    upload_mbps: float = 0.0
+    ping_ms: float = 0.0
+    server_name: str = ""
+    server_sponsor: str = ""
+    client_isp: str = ""
+    ok: bool = True
+    error: str = ""
+
+
 class DeviceApSeen(SQLModel, table=True):
     """History of which APs a device has been associated with.
 
@@ -80,6 +101,25 @@ class DeviceEvent(SQLModel, table=True):
     kind: str  # online | offline
     at: datetime = Field(default_factory=utcnow, index=True)
     ip: str = ""
+
+
+class WanEvent(SQLModel, table=True):
+    """Internet (WAN) connection/disconnection history.
+
+    Separate from DeviceEvent because an outage affects the whole network and
+    must not be mistaken for one device dropping off.
+    """
+
+    __tablename__ = "wan_events"
+
+    id: int | None = Field(default=None, primary_key=True)
+    kind: str  # connected | disconnected
+    at: datetime = Field(default_factory=utcnow, index=True)
+    ipv4_address: str = ""
+    connection_name: str = ""
+    reason: str = ""
+    online_seconds: int = 0
+    note: str = ""
 
 
 class KickLog(SQLModel, table=True):

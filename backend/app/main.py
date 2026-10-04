@@ -20,6 +20,8 @@ from . import auth, kick, net
 from .config import BASE_DIR, config_store
 from .db import Device, DeviceEvent, KickLog, ScanSample, engine, get_session, init_db, utcnow
 from . import fingerprint
+from . import router_health, topo_client, wan_monitor, wan_status
+from . import speedtest as speedtest_mod
 from .router_client import RouterError
 from .scanner import device_to_dict, hub, kicked_map, scan_loop, scan_loop_once
 
@@ -34,6 +36,9 @@ async def lifespan(app: FastAPI):
     init_db()
     _log_startup_diagnostics()
     task = asyncio.create_task(scan_loop())
+    # WAN is polled in its own thread on a 2-minute cadence, so it never adds
+    # latency to the device scan or to any API request.
+    wan_monitor.start(loop=asyncio.get_running_loop())
     yield
     # Never leave a spoof or a router block behind when the server exits.
     try:
@@ -320,6 +325,115 @@ async def router_status(username: str = Depends(auth.require_auth)):
     }
 
 
+# --------------------------------------------------------------- activity
+
+
+@app.get("/api/activity")
+async def activity(
+    limit: int = 100,
+    mac: str = "",
+    username: str = Depends(auth.require_auth),
+):
+    """Cross-device connect/disconnect feed, newest first.
+
+    Reads the `device_events` rows the scanner has always been writing, joined
+    to the current device so the UI gets a name and type without a second call.
+    """
+    from .fingerprint import friendly_name
+
+    limit = max(1, min(limit, 300))
+    with get_session() as s:
+        stmt = select(DeviceEvent)
+        if mac:
+            stmt = stmt.where(DeviceEvent.mac == net.normalize_mac(mac))
+        rows = s.exec(
+            stmt.order_by(DeviceEvent.at.desc(), DeviceEvent.id.desc()).limit(limit)
+        ).all()
+        devs = {
+            d.mac: d
+            for d in s.exec(select(Device)).all()
+        }
+
+        out = []
+        for e in rows:
+            d = devs.get(e.mac)
+            out.append(
+                {
+                    "id": e.id,
+                    "at": e.at.isoformat() if e.at else None,
+                    "mac": e.mac,
+                    "kind": e.kind,
+                    "ip": e.ip,
+                    "name": friendly_name(
+                        hostname=(d.hostname if d else "") or "",
+                        vendor=(d.vendor if d else "") or "",
+                        ip=e.ip,
+                        mac=e.mac,
+                        device_type=(d.device_type if d else "other"),
+                    ),
+                    "device_type": (d.type_override or d.device_type)
+                    if d
+                    else "other",
+                }
+            )
+    return {"events": out}
+
+
+# --------------------------------------------------------------- wan
+
+
+@app.get("/api/wan")
+async def wan_status_endpoint(username: str = Depends(auth.require_auth)):
+    """Current internet (WAN) status plus its outage history."""
+    from . import wan_monitor
+
+    return {
+        "status": wan_status.get().to_dict(),
+        "history": wan_monitor.history(60),
+        "poll_seconds": wan_monitor.POLL_SECONDS,
+    }
+
+
+# --------------------------------------------------------------- speedtest
+
+
+@app.post("/api/speedtest/start")
+async def speedtest_start(username: str = Depends(auth.require_auth)):
+    """Kick off a manual speedtest. Returns immediately.
+
+    Never automatic: a speedtest saturates the link, so it only runs when the
+    user presses the button. The work happens in a daemon thread
+    (app/speedtest.py) so the event loop is never blocked.
+    """
+    started = speedtest_mod.start()
+    if not started.get("started"):
+        await hub.broadcast("speedtest", speedtest_mod.status())
+    return started
+
+
+@app.get("/api/speedtest/status")
+async def speedtest_status(username: str = Depends(auth.require_auth)):
+    return speedtest_mod.status()
+
+
+@app.get("/api/speedtest/history")
+async def speedtest_history(limit: int = 20, username: str = Depends(auth.require_auth)):
+    return {"runs": speedtest_mod.history(limit)}
+
+
+# ------------------------------------------------------------ router health
+
+
+@app.get("/api/router/health")
+async def get_router_health(username: str = Depends(auth.require_auth)):
+    """Uptime / CPU / memory from the router's Status page.
+
+    Cached server-side for three minutes: the UI may call this on every render,
+    but the router itself is only actually asked occasionally.
+    """
+    return router_health.get().to_dict()
+
+
 @app.post("/api/router/sync")
 async def router_sync(username: str = Depends(auth.require_auth)):
     """Re-read the router blacklist so netdash matches reality."""
@@ -590,6 +704,24 @@ if FRONTEND_DIST.is_dir():
 
     @app.get("/{full_path:path}")
     def spa(full_path: str):
+        # An unmatched /api/ or /ws/ path must NOT fall through to index.html.
+        # Returning HTML at status 200 made every missing endpoint look like a
+        # corrupt response ("invalid response from server (200)") instead of
+        # the honest 404 it actually is.
+        if full_path.startswith(("api/", "ws/")):
+            raise HTTPException(status_code=404, detail="Endpoint tidak ditemukan")
+
+        # Flag the served bundle. A production build kept in frontend/dist is
+        # days out of date during development and looks like a working app
+        # while silently missing every route added since it was built - which is
+        # exactly how a stale page produced an "invalid response" error that had
+        # nothing to do with the backend.
+        if (FRONTEND_DIST / "index.html").exists():
+            return FileResponse(
+                FRONTEND_DIST / "index.html",
+                headers={"X-Netdash-Served-By": "production-build (stale?) use http://localhost:5173"},
+            )
+
         candidate = FRONTEND_DIST / full_path
         if full_path and candidate.is_file():
             return FileResponse(candidate)

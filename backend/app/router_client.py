@@ -267,6 +267,21 @@ class ZteRouter:
         log.info("berhasil login ke %s (token %s…)", self.base_url, token[:6])
         return token
 
+    def page_get(self, page_url: str, data_url: str) -> str:
+        """Load a menu page, then GET its data endpoint with the page's token.
+
+        Used for the WAN status page, whose data URL carries its own query
+        parameters and is read with GET rather than POST+IF_ACTION.
+        """
+        page = self.client.get(page_url, headers=self._headers())
+        if page.status_code != 200:
+            raise RuntimeError(f"router page {page.status_code}")
+        body = page.text
+        if "login_need_refresh" in body or "SessionTimeout" in body:
+            self.login()
+            body = self.client.get(page_url, headers=self._headers()).text
+        return self.client.get(data_url, headers=self._headers()).text
+
     def ensure_login(self) -> None:
         if not self.logged_in or not self.session_token:
             self.login()
@@ -447,6 +462,48 @@ class ZteRouter:
             if cand not in used:
                 return cand
         raise RouterError("Semua 10 slot Access Control router sudah penuh")
+
+    def page_post(self, page_url: str, data_tag: str) -> str | None:
+        """Load a menuView page for its token, then POST a menuData tag.
+
+        Read-only helper for endpoints like router health, where the data tag
+        answers SessionTimeout until the owning page has been fetched.
+        Returns the raw body, or None.
+        """
+        self.ensure_login()
+        try:
+            page = self.client.get(page_url, headers=self._headers())
+        except Exception as e:  # noqa: BLE001
+            log.debug("page_post: %s failed: %s", page_url, e)
+            return None
+        token = ""
+        if getattr(page, "status_code", 0) == 200:
+            import codecs
+            import re as _re
+
+            toks = [
+                codecs.decode(t, "unicode_escape")
+                for t in _re.findall(
+                    r'_sessionTmpToken\s*=\s*["\']([^"\']*)["\']', page.text
+                )
+            ]
+            toks = [t for t in toks if t]
+            if toks:
+                token = toks[-1]
+                self.acl_token = token
+        try:
+            body, headers = self._encode_body(
+                {"IF_ACTION": "Read", "_sessionTOKEN": token or self.session_token}
+            )
+            resp = self.client.post(
+                f"/?_type=menuData&_tag={data_tag}", content=body, headers=headers
+            )
+        except Exception as e:  # noqa: BLE001
+            log.debug("page_post: POST %s failed: %s", data_tag, e)
+            return None
+        if resp.status_code != 200 or "SessionTimeout" in resp.text:
+            return None
+        return resp.text
 
     def rules_for(self, mac: str) -> list[Rule]:
         """Every ACL rule currently holding this MAC, one per AP."""

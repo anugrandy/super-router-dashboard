@@ -34,6 +34,22 @@ if ($busy) {
 }
 Write-Host "  clean"
 
+# A production build left in frontend/dist is served by the backend's SPA
+# fallback on :8000 and silently shadows every route added since it was built.
+# Development happens on the Vite dev server, so move it aside rather than let a
+# days-old bundle masquerade as the current app.
+$staleDist = Join-Path $Root "frontend\dist"
+if (Test-Path $staleDist) {
+    $age = (Get-Date) - (Get-Item $staleDist).LastWriteTime
+    $stash = Join-Path $Root "frontend\dist.stale"
+    if (Test-Path $stash) { Remove-Item $stash -Recurse -Force }
+    Rename-Item $staleDist "dist.stale"
+    Write-Host ""
+    Write-Host "=== stale frontend/dist moved aside ===" -ForegroundColor Cyan
+    Write-Host ("  built {0} ago - moved to frontend\dist.stale" -f [int]$age.TotalHours) -ForegroundColor Yellow
+    Write-Host "  (:8000 no longer serves an out-of-date bundle; use :5173)" -ForegroundColor Yellow
+}
+
 Write-Host ""
 Write-Host "=== router credentials (values never printed) ===" -ForegroundColor Cyan
 foreach ($k in @("NETDASH_ROUTER_USER", "NETDASH_ROUTER_PASS", "NETDASH_ROUTER_URL")) {

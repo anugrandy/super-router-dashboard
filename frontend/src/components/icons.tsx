@@ -16,6 +16,9 @@ import {
   LogOut,
   Monitor,
   Phone,
+  Plug,
+  Unplug,
+  X,
   Printer,
   RefreshCw,
   Router,
@@ -58,6 +61,27 @@ export const UiLogout = ({ className = '' }: { className?: string }) => (
 export const UiRefresh = ({ className = '' }: { className?: string }) => (
   <Icon Ico={RefreshCw} size={15} className={className} />
 )
+export const IconClose = ({
+  size = 13,
+  className = '',
+}: {
+  size?: number
+  className?: string
+}) => <Icon Ico={X} size={size} className={className} />
+export const IconPlug = ({
+  size = 13,
+  className = '',
+}: {
+  size?: number
+  className?: string
+}) => <Icon Ico={Plug} size={size} className={className} />
+export const IconUnplug = ({
+  size = 13,
+  className = '',
+}: {
+  size?: number
+  className?: string
+}) => <Icon Ico={Unplug} size={size} className={className} />
 
 /** Device type -> lucide glyph. Keys match the backend `device_type` values. */
 export const TYPE_ICON: Record<string, LucideIcon> = {

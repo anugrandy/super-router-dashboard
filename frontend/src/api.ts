@@ -66,6 +66,121 @@ export type KickLog = {
 
 export type DeviceEvent = { kind: 'online' | 'offline'; at: string; ip: string }
 
+/** One connect/disconnect transition, pushed over the WebSocket by the scanner
+ *  and used to drive toasts. `kind` is 'new' for a first-ever sighting. */
+export type Transition = {
+  mac: string
+  kind: 'new' | 'online' | 'offline'
+  name: string
+  ip: string
+  device_type: string
+}
+
+/** Current internet (WAN) link state, from the router's Internet > Status > WAN. */
+export type WanStatus = {
+  available: boolean
+  connection_name: string
+  connection_type: string
+  auth_type: string
+  ipv4_status: 'connected' | 'disconnected' | 'unknown'
+  ipv4_address: string
+  subnet_mask: string
+  gateway: string
+  dns: string[]
+  online_seconds: number
+  online_human: string
+  disconnect_reason: string
+  ipv6_status: 'connected' | 'disconnected' | 'unknown'
+  ipv6_address: string
+  ipv6_gateway: string
+  ipv6_dns: string[]
+  ipv6_online_human: string
+  vlan_id: string
+  mtu: string
+  is_nat: boolean
+  is_default_gateway: boolean
+  connections: {
+    name: string
+    type: string
+    ipv4_status: string
+    ipv4_address: string
+    uptime: number
+    is_default_gateway: boolean
+  }[]
+  error: string
+  fetched_at: number
+  connected: boolean
+}
+
+export type WanEvent = {
+  id: number
+  at: string | null
+  kind: 'connected' | 'disconnected'
+  ipv4_address: string
+  connection_name: string
+  reason: string
+  online_seconds: number
+}
+
+export type ActivityEvent = {
+  id: number
+  at: string | null
+  mac: string
+  kind: 'online' | 'offline'
+  ip: string
+  name: string
+  device_type: string
+}
+
+export type SpeedtestResult = {
+  download_mbps: number
+  upload_mbps: number
+  ping_ms: number
+  server_name: string
+  server_sponsor: string
+  server_host: string
+  server_country: string
+  client_isp: string
+  client_ip: string
+  at: string
+  error: string
+}
+
+export type SpeedtestStatus = {
+  running: boolean
+  phase: string
+  elapsed: number
+  log: string[]
+  result: SpeedtestResult | null
+  error: string
+}
+
+export type SpeedtestRun = {
+  id: number
+  at: string | null
+  download_mbps: number
+  upload_mbps: number
+  ping_ms: number
+  server_name: string
+  server_sponsor: string
+  client_isp: string
+  ok: boolean
+  error: string
+}
+
+export type RouterHealth = {
+  available: boolean
+  model: string
+  software_version: string
+  serial_number: string
+  uptime_seconds: number
+  uptime_human: string
+  cpu_cores: number[]
+  cpu_max: number
+  mem_pct: number | null
+  error: string
+}
+
 export type Settings = {
   subnet: string
   interface: string | null
@@ -162,7 +277,17 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     body = text ? JSON.parse(text) : null
   } catch {
-    throw new Error(`Responsan tidak valid dari server (${res.status})`)
+    // Do NOT guess a cause here. An earlier version of this message blamed the
+    // proxy and the backend, which sent the debugging in the wrong direction -
+    // the real cause was a stale production bundle served instead of the dev
+    // server. Report what actually arrived and let the reader decide.
+    const ctype = res.headers.get('content-type') || ''
+    const kind = ctype.includes('text/html') ? 'HTML' : ctype || 'body kosong'
+    throw new Error(
+      `Server mengirim ${kind}, bukan JSON (HTTP ${res.status}). ` +
+        `Cek halaman ini dilayani frontend mana: dev server :5173, atau ` +
+        `bundle produksi lama.`,
+    )
   }
   if (!res.ok) {
     const detail = (body as { detail?: string })?.detail
@@ -187,6 +312,10 @@ export const api = {
   logout: () => req<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
 
   devices: () => req<{ devices: Device[]; count: number }>('/api/devices'),
+  activity: (limit = 100) =>
+    req<{ events: ActivityEvent[] }>(`/api/activity?limit=${limit}`),
+  wan: () =>
+    req<{ status: WanStatus; history: WanEvent[]; poll_seconds: number }>('/api/wan'),
   device: (mac: string) =>
     req<{ device: Device; events: DeviceEvent[]; kicks: KickLog[] }>(`/api/devices/${enc(mac)}`),
   rename: (mac: string, nickname: string) =>
@@ -217,6 +346,18 @@ export const api = {
       arp_stopped: boolean
     }>(`/api/devices/${enc(mac)}/unkick`, { method: 'POST' }),
   scanNow: () => req<{ ok: boolean }>('/api/scan', { method: 'POST' }),
+
+  // Speedtest: manual only. start() returns immediately; status() is polled
+  // by the caller while a test is in flight and nowhere else.
+  speedtestStart: () =>
+    req<{ started: boolean; reason?: string }>('/api/speedtest/start', {
+      method: 'POST',
+    }),
+  speedtestStatus: () =>
+    req<SpeedtestStatus>('/api/speedtest/status'),
+  speedtestHistory: (limit = 20) =>
+    req<{ runs: SpeedtestRun[] }>(`/api/speedtest/history?limit=${limit}`),
+  routerHealth: () => req<RouterHealth>('/api/router/health'),
 
   dashboard: () => req<Dashboard>('/api/dashboard'),
   interfaces: () => req<IfaceReport>('/api/interfaces'),

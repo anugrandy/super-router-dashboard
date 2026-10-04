@@ -367,11 +367,22 @@ table.net tbody tr:last-child td {
 /* The headline number on each stat card. Deliberately the largest, heaviest
    element on the page: it is what you read first at a glance. */
 .stat-value {
-  font-size: 2.75rem;
+  /* No font-size here on purpose: it would override the text-[...] utility on
+     the same element (equal specificity, and this sheet loads first). Callers
+     set the size, this class carries weight, tracking and colour. */
   font-weight: 800;
   line-height: 1.05;
   letter-spacing: -0.035em;
   color: #f7f9fc;
+}
+
+/* A stat value that is a phrase rather than a number ("1 hari 16j 35m"). The
+   tight tracking above is for digits; on a word sequence it closes up the
+   spaces and reads as one run-on word. Tailwind's own `tracking-normal` utility
+   cannot override this class - utilities are emitted earlier in the bundle, so
+   equal specificity loses - hence the explicit rule. */
+.stat-value-text {
+  letter-spacing: normal;
 }
 
 /* recharts overrides — its defaults are too loud for this theme. */

@@ -3,6 +3,12 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth, useLive } from '../live'
 import { api } from '../api'
 import { UiDashboard, UiDevices, UiSettings, UiSearch, UiLogout, UiRefresh } from './icons'
+import { Gauge, Network, Activity, Globe } from 'lucide-react'
+import Toasts from './Toasts'
+
+const NavIcon = ({ children }: { children: React.ReactNode }) => (
+  <span className="shrink-0">{children}</span>
+)
 
 /** One sidebar row. NavLink's isActive drives the accent highlight. */
 function Item({
@@ -137,8 +143,20 @@ export default function Layout({ children }: { children: ReactNode }) {
             <Item to="/dashboard" icon={<UiDashboard />}>
               Dashboard
             </Item>
+            <Item to="/topology" icon={<NavIcon><Network size={17} /></NavIcon>}>
+              Topologi
+            </Item>
             <Item to="/devices" icon={<UiDevices />}>
               Devices
+            </Item>
+            <Item to="/activity" icon={<NavIcon><Activity size={17} /></NavIcon>}>
+              Aktivitas
+            </Item>
+            <Item to="/connection" icon={<NavIcon><Globe size={17} /></NavIcon>}>
+              Koneksi Internet
+            </Item>
+            <Item to="/speedtest" icon={<NavIcon><Gauge size={17} /></NavIcon>}>
+              Speedtest
             </Item>
             <Item to="/settings" icon={<UiSettings />}>
               Settings
@@ -174,6 +192,10 @@ export default function Layout({ children }: { children: ReactNode }) {
       <main className="flex-1 min-w-0 relative z-[1]">
         <div className="max-w-7xl mx-auto px-6 py-6">{children}</div>
       </main>
+
+      {/* Live connect/disconnect toasts. Subscribes to the transitions pub/sub
+          directly, so showing them does not re-render anything else. */}
+      <Toasts />
     </div>
   )
 }

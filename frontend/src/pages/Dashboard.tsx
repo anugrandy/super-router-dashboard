@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Area,
@@ -16,9 +16,17 @@ import {
   fmtDuration,
   fmtTime,
   type Dashboard,
+  type WanStatus,
 } from '../api'
 import { PageHeader, ScanButton } from '../components/Layout'
-import { DeviceTypeChip, STAT_ICON, STAT_TINT } from '../components/icons'
+import {
+  DeviceTypeChip,
+  IconPlug,
+  IconUnplug,
+  STAT_ICON,
+  STAT_TINT,
+} from '../components/icons'
+import { useWanEvent } from '../components/Toasts'
 import { useLive } from '../live'
 
 export default function DashboardPage() {
@@ -85,6 +93,10 @@ export default function DashboardPage() {
           {err}
         </div>
       )}
+
+      {/* Compact internet status, linking to the full page. Not a Stat card
+          because it needs to be clickable and carries a colour state. */}
+      <WanSummary />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-5">
         <Stat
@@ -371,7 +383,7 @@ function Stat({
           <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#98a3b4]">
             {label}
           </div>
-          <div className={`stat-value mt-2 ${valueColor}`}>{value}</div>
+          <div className={`stat-value mt-2 text-[2.75rem] ${valueColor}`}>{value}</div>
         </div>
         {icon && <div className="opacity-90">{icon}</div>}
       </div>
@@ -392,5 +404,70 @@ function Stat({
         <div className="text-[10px] text-[#5d6675] mt-1.5">dibanding {spanLabel} lalu</div>
       )}
     </div>
+  )
+}
+/**
+ * One-line internet status for the dashboard.
+ *
+ * Loads once and refreshes when the monitor pushes a change; the endpoint is
+ * cached server-side for two minutes, so mounting this costs one request, not
+ * one per render or per device scan.
+ */
+function WanSummary() {
+  const [s, setS] = useState<WanStatus | null>(null)
+  const wanEvent = useWanEvent()
+
+  const load = useCallback(async () => {
+    try {
+      setS((await api.wan()).status)
+    } catch {
+      // Leave the card hidden rather than showing a false "unknown" state.
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+  useEffect(() => {
+    if (wanEvent) void load()
+  }, [wanEvent, load])
+
+  if (!s) return null
+
+  const up = s.ipv4_status === 'connected'
+  const color = !s.available ? '#7c8798' : up ? '#6fd9b8' : '#f295aa'
+  const text = !s.available
+    ? 'Router tidak terhubung'
+    : up
+      ? 'Internet Tersambung'
+      : 'Internet Terputus'
+  const sub = !s.available
+    ? 'status terakhir tidak bisa diperbarui'
+    : up
+      ? `${s.connection_name} · online ${s.online_human}`
+      : s.disconnect_reason || 'koneksi ke ISP terputus'
+
+  return (
+    <Link
+      to="/connection"
+      className="card card-hover px-4 py-3 mb-5 flex items-center gap-3 transition"
+      style={{ borderColor: up ? 'rgba(70,201,162,0.22)' : 'rgba(242,113,139,0.3)' }}
+    >
+      <span
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+        style={{ color, background: `${color}1f` }}
+      >
+        {up ? <IconPlug size={16} /> : <IconUnplug size={16} />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-semibold" style={{ color }}>
+          {text}
+        </span>
+        <span className="block text-[11px] text-[#7c8798] truncate">{sub}</span>
+      </span>
+      <span className="text-[11px] text-[#5d6675] shrink-0 hidden sm:inline">
+        Lihat detail
+      </span>
+    </Link>
   )
 }

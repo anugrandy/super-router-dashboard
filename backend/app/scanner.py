@@ -22,7 +22,12 @@ from .db import (
     utcnow,
 )
 from .net import arp_scan, guess_device_type, lookup_vendor, normalize_mac, valid_mac
-from .fingerprint import fingerprint, is_confident, is_randomized_mac
+from .fingerprint import (
+    fingerprint,
+    friendly_name,
+    is_confident,
+    is_randomized_mac,
+)
 from .topo_client import get_client as get_topo_client
 from .ssid_resolver import get_resolver
 
@@ -332,7 +337,33 @@ async def _run_scan(subnet: str, iface: str | None) -> list[dict]:
         s.add(ScanSample(online=len(online), total=len(total)))
         s.commit()
 
-        return [device_to_dict(d) for d in total]
+        # Return the transitions alongside the device list. The UI could diff
+        # the list itself, but the scanner already knows exactly what changed
+        # (including which device is genuinely new), so sending it avoids every
+        # client re-deriving the same information on every scan.
+        payload = [device_to_dict(d) for d in total]
+        by_mac = {d["mac"]: d for d in payload}
+        transitions = []
+        for ch in changes:
+            d = by_mac.get(ch["mac"])
+            if d is None:
+                continue
+            transitions.append(
+                {
+                    "mac": ch["mac"],
+                    "kind": ch["kind"],
+                    "name": friendly_name(
+                        hostname=d.get("hostname") or "",
+                        vendor=d.get("vendor") or "",
+                        ip=d.get("ip") or "",
+                        mac=ch["mac"],
+                        device_type=d.get("device_type") or "other",
+                    ),
+                    "ip": d.get("ip") or "",
+                    "device_type": d.get("device_type") or "other",
+                }
+            )
+        return payload, transitions
 
 
 async def scan_loop() -> None:
@@ -344,9 +375,11 @@ async def scan_loop() -> None:
     while True:
         cfg = config_store.settings
         try:
-            devices = await _run_scan(cfg.subnet, cfg.interface)
+            devices, transitions = await _run_scan(cfg.subnet, cfg.interface)
             await hub.broadcast("devices", devices)
             await hub.broadcast("kicked", kicked_map())
+            if transitions:
+                await hub.broadcast("transitions", transitions)
         except Exception as e:  # keep the loop alive through transient errors
             log.warning("scan failed: %s", e)
             await hub.broadcast("error", str(e))
@@ -368,8 +401,10 @@ async def scan_loop_once() -> None:
     async with _scan_lock:
         cfg = config_store.settings
         try:
-            devices = await _run_scan(cfg.subnet, cfg.interface)
+            devices, transitions = await _run_scan(cfg.subnet, cfg.interface)
             await hub.broadcast("devices", devices)
             await hub.broadcast("kicked", kicked_map())
+            if transitions:
+                await hub.broadcast("transitions", transitions)
         except Exception as e:
             log.warning("manual scan failed: %s", e)

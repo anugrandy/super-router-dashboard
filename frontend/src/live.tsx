@@ -8,7 +8,15 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { api, AuthError, type Device, type KickedMap } from './api'
+import {
+  api,
+  AuthError,
+  type Device,
+  type KickedMap,
+  type Transition,
+  type WanEvent,
+} from './api'
+import { publishTransitions, publishWan } from './components/Toasts'
 
 type LiveState = {
   connected: boolean
@@ -105,6 +113,15 @@ export function LiveProvider({ children }: { children: ReactNode }) {
               ? s.devices.map((x) => (x.mac === d.mac ? d : x))
               : [...s.devices, d],
           }))
+        } else if (msg.event === 'transitions') {
+          // Published straight to the toast subscribers. Deliberately not put
+          // into LiveState: every consumer of useLive() would re-render on
+          // each connect/disconnect.
+          publishTransitions(msg.data as Transition[])
+        } else if (msg.event === 'wan') {
+          // An internet outage is a different kind of event from one device
+          // dropping off, so it gets its own louder alert channel.
+          publishWan(msg.data as WanEvent)
         } else if (msg.event === 'error') {
           setState((s) => ({ ...s, error: String(msg.data) }))
         }
