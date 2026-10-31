@@ -71,7 +71,7 @@ export default function TopologyPage() {
           // leaving it empty next to the CPU per-core detail.
           detail={bootedAt ? `nyala sejak ${bootedAt}` : undefined}
           hint={health?.available ? health.uptime_human : undefined}
-          tint={{ bg: 'rgba(139,141,147,0.14)', fg: '#8B8D93' }}
+          tint={{ bg: 'var(--color-surface2)', fg: 'var(--color-muted)' }}
         />
         <HealthCard
           icon={<Cpu size={16} />}
@@ -91,7 +91,7 @@ export default function TopologyPage() {
               ? `${cores.length} core — ${cores.map((c) => `${c}%`).join(' / ')}`
               : undefined
           }
-          tint={{ bg: 'rgba(62,210,140,0.14)', fg: '#3ED28C' }}
+          tint={{ bg: 'var(--color-surface2)', fg: 'var(--color-muted)' }}
         />
         <HealthCard
           icon={<MemoryStick size={16} />}
@@ -103,18 +103,18 @@ export default function TopologyPage() {
               ? `Memory terpakai ${health.mem_pct}%`
               : undefined
           }
-          tint={{ bg: 'rgba(139,141,147,0.14)', fg: '#8B8D93' }}
+          tint={{ bg: 'var(--color-surface2)', fg: 'var(--color-muted)' }}
         />
       </div>
 
       {health && !health.available && health.error && (
-        <div className="card px-4 py-3 mb-4 border-amber-400/30 bg-amber-400/[0.06] text-[13px] text-[#E7B34A]">
+        <div className="card px-4 py-3 mb-4 border-red/40 text-[13px] text-red">
           Data kesehatan router tidak bisa dibaca: {health.error}
         </div>
       )}
 
       {health?.available && (
-        <p className="text-[11px] text-[#58585F] mb-3">
+        <p className="mono text-[11px] text-muted2 mb-3 leading-relaxed">
           {health.model} · firmware {health.software_version} · serial{' '}
           {health.serial_number} · CPU 4 core ditampilkan terpisah, refresh tiap
           3 menit
@@ -165,12 +165,10 @@ function HealthCard({
   tint: { bg: string; fg: string }
 }) {
   return (
-    <div className="card card-hover p-4 min-h-[100px] flex flex-col" title={hint}>
+    <div className="card card-hover p-5 min-h-[100px] flex flex-col" title={hint}>
       <div className="flex items-start justify-between gap-3 flex-1">
         <div className="min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#8B8D93]">
-            {label}
-          </div>
+          <div className="stat-label">{label}</div>
           {/* One number per card, on one line: the value is the only thing that
               needs to be large. Anything per-item goes in `detail` below. */}
           <div className="mt-1.5 flex items-baseline gap-1 whitespace-nowrap">
@@ -180,19 +178,19 @@ function HealthCard({
               {value}
             </span>
             {unit && (
-              <span className="text-[12px] text-[#8B8D93] shrink-0">{unit}</span>
+              <span className="text-[12px] text-muted shrink-0">{unit}</span>
             )}
           </div>
           {/* Reserved line so all three cards keep the same height whether or
               not they have a detail row. The height must cover the text's full
               line box (10px x 1.55 = 15.5px), not just the glyph height, or the
               descenders are clipped against the card's bottom edge. */}
-          <div className="mono text-[10px] leading-4 text-[#58585F] mt-2 h-4 truncate">
+          <div className="mono text-[10px] leading-4 text-muted2 mt-2 h-4 truncate">
             {detail}
           </div>
         </div>
         <span
-          className="inline-flex items-center justify-center w-8 h-8 rounded-[10px] shrink-0"
+          className="inline-flex items-center justify-center w-8 h-8 rounded-md shrink-0 border border-border"
           style={{ background: tint.bg, color: tint.fg }}
         >
           {icon}

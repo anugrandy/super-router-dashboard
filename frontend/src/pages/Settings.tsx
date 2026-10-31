@@ -106,12 +106,12 @@ export default function SettingsPage() {
       />
 
       {msg && (
-        <div className="card px-4 py-3 border-[rgba(62,210,140,0.28)] bg-[rgba(62,210,140,0.07)] text-sm text-[#3ED28C] mb-4">
+        <div className="card px-4 py-3 border-green/30 text-sm text-green mb-4">
           {msg}
         </div>
       )}
       {err && (
-        <div className="card px-4 py-3 border-[rgba(232,96,74,0.3)] bg-[rgba(232,96,74,0.07)] text-sm text-[#E8604A] mb-4">
+        <div className="card px-4 py-3 border-red/40 text-sm text-red mb-4">
           {err}
         </div>
       )}
@@ -149,7 +149,7 @@ export default function SettingsPage() {
 
         <Field label="Interval scan (detik)" hint="Minimal 5 detik">
           <input
-            className="input"
+            className="input mono"
             type="number"
             min={5}
             max={3600}
@@ -162,13 +162,13 @@ export default function SettingsPage() {
       <section className="card p-5 space-y-3">
         <h2 className="card-title">Diagnostik kick</h2>
         {net?.is_admin === false ? (
-          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-200">
-            <strong>Backend tidak berjalan sebagai Administrator.</strong> ARP spoof
+          <div className="rounded-md border border-border-strong bg-surface2 px-3 py-2.5 text-sm text-muted">
+            <strong className="text-ink">Backend tidak berjalan sebagai Administrator.</strong> ARP spoof
             butuh raw socket, jadi kick tidak akan memblokir traffic apa pun sampai
             server dijalankan ulang dengan &ldquo;Run as Administrator&rdquo;.
           </div>
         ) : net?.is_admin ? (
-          <div className="rounded-[12px] border border-[rgba(62,210,140,0.28)] bg-[rgba(62,210,140,0.07)] px-3 py-2.5 text-sm text-[#3ED28C]">
+          <div className="rounded-md border border-green/30 px-3 py-2.5 text-sm text-green">
             Backend berjalan dengan hak Administrator — spoof bisa dikirim.
           </div>
         ) : null}
@@ -207,7 +207,7 @@ export default function SettingsPage() {
                   <span className="text-ink">{i.name}</span>
                   <span className="mono text-muted2">{i.ip ?? '-'}</span>
                   {i.is_default && (
-                    <span className="text-amber-400">
+                    <span className="text-muted">
                       · default scapy (berisiko; diabaikan aplikasi)
                     </span>
                   )}
@@ -217,7 +217,7 @@ export default function SettingsPage() {
           </div>
         )}
 
-        <p className="text-[11px] text-[#58585F] leading-relaxed">
+        <p className="text-[11px] text-muted2 leading-relaxed">
           Aplikasi ini selalu mengirim lewat adapter yang memegang IP lokal kamu, bukan
           default scapy — di mesin dengan VMware/VirtualBox, default scapy bisa
           menunjuk adapter virtual sehingga frame tidak pernah sampai ke LAN.
@@ -254,7 +254,7 @@ export default function SettingsPage() {
         </Field>
 
         {!s.router_configured && (
-          <div className="rounded-[12px] border border-[rgba(232,96,74,0.3)] bg-[rgba(232,96,74,0.07)] px-3 py-2.5 text-sm text-[#E8604A] mb-4">
+          <div className="rounded-md border border-red/40 px-3 py-2.5 text-sm text-red mb-4">
             <strong>Kredensial router tidak ditemukan.</strong>{' '}
             {s.env_file_found
               ? 'backend/.env ada tapi NETDASH_ROUTER_USER/PASS kosong di dalamnya.'
@@ -264,10 +264,10 @@ export default function SettingsPage() {
 
         {router && (
           <div
-            className={`rounded-[12px] border px-3 py-2.5 text-sm ${
+            className={`rounded-md border px-3 py-2.5 text-sm ${
               router.reachable
-                ? 'border-[rgba(62,210,140,0.28)] bg-[rgba(62,210,140,0.07)] text-[#3ED28C]'
-                : 'border-[rgba(232,96,74,0.3)] bg-[rgba(232,96,74,0.07)] text-[#E8604A]'
+                ? 'border-green/30 text-green'
+                : 'border-red/40 text-red'
             }`}
           >
             {router.reachable ? 'Router terhubung.' : 'Router tidak bisa dihubungi.'}{' '}
@@ -295,7 +295,7 @@ export default function SettingsPage() {
 
         <Field label="Batas durasi kick (detik)" hint="Auto-stop sebagai pengaman">
           <input
-            className="input"
+            className="input mono"
             type="number"
             min={10}
             max={86400}
@@ -365,7 +365,7 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#58585F] mb-1.5">
+      <label className="block text-[11px] font-medium uppercase tracking-[0.08em] text-muted mb-1.5">
         {label}
       </label>
       {children}

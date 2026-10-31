@@ -59,6 +59,7 @@ export function useClock() {
  * badge advances between backend pushes.
  */
 export function LiveProvider({ children }: { children: ReactNode }) {
+  const { username } = useAuth()
   const [state, setState] = useState<LiveState>({
     connected: false,
     devices: [],
@@ -73,6 +74,24 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     closedRef.current = false
+
+    // The WS endpoint authenticates with the session cookie and rejects
+    // anonymous clients with 1008. Connecting before AuthProvider has resolved
+    // /api/auth/me therefore closed the socket permanently: logging in later
+    // did not remount this effect, so the device list stayed frozen. Wait for
+    // a username and reconnect whenever the session identity changes.
+    if (!username) {
+      setState({
+        connected: false,
+        devices: [],
+        kicked: {},
+        lastEventAt: null,
+        error: null,
+      })
+      return () => {
+        closedRef.current = true
+      }
+    }
 
     const connect = () => {
       if (closedRef.current) return
@@ -129,8 +148,14 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       ws.onclose = (ev) => {
         setState((s) => ({ ...s, connected: false }))
         if (closedRef.current) return
-        // 1008 = our auth check rejected it; retrying won't help.
-        if (ev.code === 1008) return
+        // 1008 = our auth check rejected it. The session may have expired while
+        // the page stayed open, so retry slowly instead of dying. A fresh login
+        // changes `username`, which also restarts this effect.
+        if (ev.code === 1008) {
+          retryRef.current = 0
+          window.setTimeout(connect, 5000)
+          return
+        }
         retryRef.current = Math.min(retryRef.current + 1, 6)
         window.setTimeout(connect, Math.min(1000 * 2 ** retryRef.current, 20000))
       }
@@ -142,7 +167,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       closedRef.current = true
       wsRef.current?.close()
     }
-  }, [])
+  }, [username])
 
   // Local 1 Hz tick so the kicked countdown animates without server pushes.
   // It stops entirely when nothing is kicked: an always-on timer forced a

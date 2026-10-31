@@ -1,107 +1,442 @@
 # AN Telemetry — Network Dashboard & Device Manager
 
-Dashboard jaringan rumah + device manager. Menjalur di laptop sendiri (localhost),
-untuk memonitor dan mengelola perangkat di jaringan WiFi/LAN **milik Anda sendiri**.
+Dashboard jaringan rumah + device manager yang berjalan di laptop/server sendiri
+(localhost atau LAN internal). Memantau perangkat di WiFi/LAN **milik Anda
+sendiri**, menampilkan vendor/tipe perangkat, dan bisa memblokir perangkat lewat
+Access Control router atau ARP spoofing.
 
 ```
-[React + Vite + Tailwind]  <--REST/WebSocket-->  [FastAPI]  <--scapy raw socket-->  [LAN Anda]
-                                                                   |
-                                                              [SQLite]
+[React + Vite + Tailwind]  <--REST/WebSocket-->  [FastAPI]  <--scapy/router API-->  [LAN Anda]
+                                                                    |
+                                                               [SQLite]
 ```
+
+> Gunakan hanya pada jaringan yang Anda miliki atau yang Anda punya izin
+> eksplisit untuk mengelolanya.
 
 ---
 
 ## Fitur
 
 - **Device discovery** — ARP sweep subnet (default `192.168.1.0/24`), auto-detect
-  interface dan IP lokal. Reverse DNS, vendor dari OUI IEEE, klasifikasi tipe
-  (HP/laptop/TV/IoT/router/server), first seen / last seen.
-- **Live update** — WebSocket `/ws/live`, hasil scan dipush ke UI tiap interval.
-- **Nickname** — beri nama sendiri per device, tersimpan permanen.
-- **Kick (ARP spoof dua arah)** — putuskan trafik device target dengan poisoned
-  ARP, dengan auto-stop dan **restore ARP asli** saat dihentikan.
-- **Whitelist** — MAC yang tidak bisa di-kick (mis. gateway, laptop Anda).
-- **Dashboard** — statistik online/offline, grafik tren, device terbaru, log kick.
-- **Auth** — login session cookie, rate limiting.
+  interface/IP, reverse DNS, vendor OUI IEEE, klasifikasi tipe perangkat,
+  first/last seen.
+- **Realtime** — WebSocket `/ws/live` mendorong daftar device, transisi
+  online/offline, status kick, dan event WAN ke UI.
+- **Nickname & tipe manual** — nama dan tipe perangkat tersimpan permanen.
+- **Kick/block** — Access Control router (disarankan, efektif untuk iOS) atau
+  ARP spoof dua arah sebagai fallback. Ada auto-stop, whitelist, dan restore ARP.
+- **Dashboard & riwayat** — statistik online/offline, tren scan, event
+  connect/disconnect, log kick.
+- **Auth** — session cookie, rate limiting, password bisa diganti dari Settings.
+- **Produksi** — backend bisa menyajikan `frontend/dist` langsung (satu proses,
+  tanpa Vite) dan dijalankan di bawah PM2.
 
 ---
 
 ## Requirements
 
-| Kebutuhan | Kenapa |
+| Kebutuhan | Versi / catatan |
 |---|---|
-| Python 3.11+ | backend |
-| Node.js 20+ | frontend build |
-| **Administrator / root** | ARP spoof butuh raw socket |
-| **Npcap** (Windows) | scapy butuh WinPcap-compatible driver |
+| Python | **3.11 – 3.14** |
+| Node.js | **20 atau lebih baru** |
+| npm | 10+ (ikut Node.js) |
+| OS | Windows 10/11, Linux, macOS |
+| Hak akses | `root`/Administrator hanya untuk fitur kick (raw socket) |
+| Npcap (Windows) | Wajib untuk ARP kick; centang **WinPcap API-compatible Mode** |
+| libpcap (Linux/macOS) | Untuk fitur scapy tertentu; ARP scan tetap bisa memakai raw socket |
 
-> **Windows perlu dua hal:** (1) jalankan terminal/IDE sebagai
-> *Run as Administrator*, dan (2) pasang **Npcap** dari
-> <https://npcap.com> (centang *Support raw 802.11 traffic* tidak wajib, tapi
-> berguna untuk monitor WiFi). Tanpa Npcap, dashboard **tetap jalan** —
-> scanner jatuh ke ARP cache OS — tapi **kick tidak akan efektif**.
->
-> **Linux/macOS:** cukup `sudo`. Kalau punya `cap_net_raw`:
-> `sudo setcap cap_net_raw+ep $(which python3)`.
+Dependency Python lengkap dan versinya ada di
+[`backend/requirements.txt`](backend/requirements.txt). **Gunakan satu virtual
+environment utama di root project: `.venv`.** Jangan mencampur dengan
+`backend/.venv` atau `backend/venv`. Launcher mencetak interpreter yang dipakai
+dan menolak start bila ada dependency yang tidak bisa di-import.
+
+### Dependency sistem
+
+**Linux (Debian/Ubuntu):**
+
+```bash
+sudo apt update
+sudo apt install -y python3-venv libpcap-dev net-tools iproute2
+# Opsional, agar kick tidak perlu sudo terus-menerus:
+sudo setcap cap_net_raw+ep "$(readlink -f .venv/bin/python)"
+```
+
+`net-tools` menyediakan command `arp` yang dipakai sebagai fallback saat raw
+socket tidak tersedia. `iproute2` menyediakan `ss`/`ip` untuk diagnostik.
+
+**Windows:** install [Npcap](https://npcap.com) dengan opsi **WinPcap API-compatible
+Mode**, lalu jalankan terminal sebagai **Administrator** untuk fitur kick.
+
+**macOS:** `xcode-select --install` (atau `brew install libpcap`), lalu jalankan
+dengan `sudo` bila ingin fitur kick.
 
 ---
 
-## Cara run
+## Instalasi
 
-### 1. Backend
-
-```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r backend/requirements.txt psutil
-```
-
-Jalankan sebagai admin (WAJIB untuk kick):
+### 1. Clone dan siapkan Python
 
 ```bash
-# Linux/macOS
-sudo .venv/bin/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8777
+git clone <url-repo> super-router-dashboard
+cd super-router-dashboard
 
-# Windows (Run as Administrator)
-.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8777
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r backend/requirements.txt
 ```
 
-### 2. Frontend
+Windows PowerShell:
+
+```powershell
+py -3 -m venv .venv
+.venv\Scripts\Activate.ps1
+.venv\Scripts\python.exe -m pip install --upgrade pip
+.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+```
+
+### 2. Install frontend dan dependency launcher
 
 ```bash
 cd frontend
 npm install
-npm run dev        # http://localhost:5173
+cd ..
+
+# dependency untuk command `anrouter` (prompts + open)
+npm install
 ```
 
-Vite memproxy `/api` dan `/ws` ke backend port 8777, jadi session cookie
-tetap same-origin.
-
-### 3. Login
-
-| | |
-|---|---|
-| URL | <http://localhost:5173> |
-| Username | `admin` |
-| Password | `netdash` (default, ganti lewat Settings) |
-
-Ganti password di **Settings**, atau set env sebelum pertama jalan:
+### 3. Siapkan environment
 
 ```bash
-export NETDASH_PASSWORD="password-kamu"
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 ```
 
-### Build produksi (satu server)
+Isi kredensial router di `backend/.env`. File `.env` tidak boleh di-commit.
+Detail variabel ada di [Environment variables](#environment-variables).
+
+### 4. Install command global `anrouter`
 
 ```bash
-cd frontend && npm run build     # menghasilkan frontend/dist
-cd .. && .venv/bin/python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8777
+npm link
 ```
 
-Backend otomatis menyajikan SPA hasil build di `http://127.0.0.1:8777`.
+Kalau `npm link` gagal karena prefix npm (`/usr/local`) butuh sudo, pakai
+instalasi ke direktori user yang biasanya sudah ada di PATH:
+
+```bash
+npm install -g . --prefix "$HOME/.local"
+```
+
+Pastikan `~/.local/bin` ada di `PATH` (`export PATH="$HOME/.local/bin:$PATH"`).
+Di Windows, `npm link` membuat shim `anrouter.cmd` otomatis.
+
+Cek:
+
+```bash
+anrouter --version
+anrouter --doctor
+```
 
 ---
 
+## Cara menjalankan
+
+### Cara utama: `anrouter` (cross-platform)
+
+`anrouter` adalah satu-satunya command yang direkomendasikan untuk development
+harian. Launcher ini Node.js murni, jadi perilakunya sama di Windows, Linux, dan
+macOS.
+
+```bash
+anrouter
+```
+
+Yang dilakukan launcher:
+
+1. Memilih Python dari `.venv` root (fallback ke `backend/.venv`/`python3` hanya
+   bila perlu), lalu memastikan semua dependency bisa di-import.
+2. Menyalakan backend FastAPI di `127.0.0.1:8777` bila belum berjalan.
+3. Menyalakan Vite dev server di `http://localhost:5173` bila belum berjalan.
+4. Menunggu kedua layanan benar-benar siap.
+5. Menampilkan menu **AN Telemetry**:
+   - **Web UI (Open in Browser)** — membuka `http://localhost:5173/dashboard`.
+   - **Exit** — mematikan hanya layanan yang dimulai oleh sesi `anrouter` ini.
+6. Menulis log ke `backend/server.log` dan `frontend/dev.log`.
+
+Perintah tambahan:
+
+```bash
+anrouter --doctor          # cek Python/venv, dependency, dan port
+anrouter --port 8787       # backend di port lain
+anrouter --host 127.0.0.1
+anrouter --help
+```
+
+`anrouter` memakai browser default lewat package `open` (bukan `start`/`xdg-open`
+manual). Kalau environment tidak punya browser (server/SSH), launcher tetap
+menampilkan URL untuk dibuka manual.
+
+### Alternatif/fallback: `run.sh` dan `run.ps1`
+
+File ini dipertahankan untuk environment yang tidak bisa memakai Node.js
+launcher. Keduanya **bukan** cara utama dan tidak menampilkan menu/browser.
+
+Linux/macOS:
+
+```bash
+./run.sh              # backend saja, port 8777
+./run.sh 8787         # port lain
+cd frontend && NETDASH_BACKEND=8777 npm run dev
+```
+
+Windows PowerShell:
+
+```powershell
+.\run.ps1
+.\run.ps1 -Port 8787
+cd frontend; $env:NETDASH_BACKEND="8777"; npm run dev
+```
+
+### Manual (tanpa launcher)
+
+```bash
+# terminal 1 — backend
+.venv/bin/python -m uvicorn app.main:app --app-dir backend \
+  --host 127.0.0.1 --port 8777
+
+# terminal 2 — frontend
+cd frontend
+NETDASH_BACKEND=8777 npm run dev
+```
+
+Windows:
+
+```powershell
+.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8777
+cd frontend; $env:NETDASH_BACKEND="8777"; npm run dev
+```
+
+Buka <http://localhost:5173>. Login default: **admin / netdash** (ganti lewat
+Settings atau `NETDASH_PASSWORD`).
+
+---
+
+## Deployment ke server / PM2
+
+`run-pm2.js` adalah entrypoint **khusus produksi/server**. Script ini tidak
+membaca stdin, tidak butuh TTY, dan tidak menampilkan menu. PM2 bisa
+me-restart-nya otomatis. Untuk development harian tetap pakai `anrouter`.
+
+### Build lalu jalankan
+
+```bash
+cd frontend && npm run build && cd ..
+
+pm2 start run-pm2.js --name "Dashboard-Router" -- --prod
+pm2 save
+pm2 startup          # ikuti instruksi yang dicetak PM2
+```
+
+Mode production hanya menjalankan **satu** proses backend; FastAPI menyajikan
+`frontend/dist` langsung di `http://127.0.0.1:8777` tanpa Vite. Ini menghemat
+RAM/CPU dibanding menjalankan Vite di server.
+
+Alternatif: build otomatis saat PM2 start:
+
+```bash
+pm2 start run-pm2.js --name "Dashboard-Router" -- --build
+```
+
+Mode development di PM2 (backend + Vite, untuk server internal):
+
+```bash
+pm2 start run-pm2.js --name "Dashboard-Router"
+```
+
+Perintah harian:
+
+```bash
+pm2 logs Dashboard-Router
+pm2 restart Dashboard-Router --update-env
+pm2 stop Dashboard-Router
+pm2 delete Dashboard-Router
+```
+
+### Virtual environment yang benar
+
+PM2 **tidak** otomatis memakai `.venv` root. `run-pm2.js` memilih interpreter
+dengan urutan:
+
+1. `NETDASH_PYTHON` (kalau di-set),
+2. `.venv/bin/python` (Linux/macOS) atau `.venv\Scripts\python.exe` (Windows),
+3. `backend/.venv` (legacy),
+4. `python3`/`python` dari `PATH`.
+
+Interpreter pertama yang bisa meng-import **semua** dependency runtime dipakai,
+dan pilihannya dicetak di log PM2:
+
+```
+[run-pm2] python: /path/to/super-router-dashboard/.venv/bin/python (project .venv)
+```
+
+Kalau ingin memaksa path tertentu:
+
+```bash
+NETDASH_PYTHON=/path/to/python pm2 start run-pm2.js --name "Dashboard-Router" -- --prod
+# atau setelah terdaftar:
+pm2 restart Dashboard-Router --update-env
+```
+
+### Port dan proses dobel
+
+Default backend adalah **8777**. Sebelum start, `run-pm2.js` memeriksa port dan
+berhenti dengan pesan jelas kalau port sudah dipakai. Ini mencegah kasus lama:
+backend baru gagal bind, tetapi UI diam-diam bicara ke proses lama.
+
+```bash
+pm2 list
+pm2 delete <nama-app-lama>
+ss -ltnp | grep 8777
+```
+
+---
+
+## Environment variables
+
+### `backend/.env`
+
+| Variabel | Wajib | Keterangan |
+|---|---|---|
+| `NETDASH_ROUTER_USER` | untuk Access Control | username login router ZTE |
+| `NETDASH_ROUTER_PASS` | untuk Access Control | password router |
+| `NETDASH_ROUTER_URL` | tidak | default `http://192.168.1.1` |
+| `NETDASH_PASSWORD` | tidak | password login dashboard; default `netdash` |
+| `NETDASH_PORT` | tidak | port backend; default `8777` |
+| `NETDASH_HOST` | tidak | host bind backend; default `127.0.0.1` |
+| `NETDASH_DATA` | tidak | direktori SQLite/config; default `backend/data` |
+
+Contoh lengkap: [`backend/.env.example`](backend/.env.example).
+
+### `frontend/.env`
+
+| Variabel | Keterangan |
+|---|---|
+| `NETDASH_BACKEND` | port backend yang diproxy Vite (`/api` dan `/ws`); default `8777` |
+
+Contoh: [`frontend/.env.example`](frontend/.env.example).
+
+### Environment shell tambahan
+
+| Variabel | Keterangan |
+|---|---|
+| `NETDASH_PYTHON` | paksa interpreter Python untuk `anrouter`/`run-pm2.js` |
+| `NETDASH_MODE` | `production` untuk `run-pm2.js` tanpa argumen `--prod` |
+| `NO_COLOR` | matikan warna di menu `anrouter` |
+
+---
+
+## Troubleshooting
+
+### `No module named 'cryptography'`
+
+**Root cause:** `cryptography` dipakai langsung oleh
+`backend/app/zte_check.py` untuk menandatangani header `Check` router ZTE, tetapi
+dulu tidak tercantum di `requirements.txt`. Akibatnya `pip install -r
+backend/requirements.txt` tidak memasangnya. Masalah makin membingungkan karena
+project bisa punya beberapa venv: package mungkin sudah dipasang manual ke
+`backend/.venv`, sementara PM2/launcher memakai `.venv` root yang belum punya
+`cryptography`.
+
+Sekarang `cryptography` sudah menjadi dependency eksplisit, dan kedua launcher
+memeriksa import sebelum start. Perbaiki environment dengan:
+
+```bash
+# Linux/macOS
+.venv/bin/python -m pip install -r backend/requirements.txt
+anrouter --doctor
+
+# Windows
+.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+anrouter --doctor
+```
+
+Kalau memakai PM2:
+
+```bash
+pm2 restart Dashboard-Router --update-env
+pm2 logs Dashboard-Router --lines 50
+```
+
+Pastikan log menampilkan `python: .../.venv/bin/python` dan tidak ada lagi
+warning `could not build Check header`. Tanpa `cryptography`, router login dan
+Access Control tidak bisa bekerja walaupun dashboard tetap tampil.
+
+### Device list realtime tidak update
+
+Gejala: halaman device tampil, tetapi status online/offline tidak berubah sampai
+refresh. WebSocket memakai cookie session dan endpoint `/ws/live`.
+
+Yang sudah diperbaiki:
+
+- `LiveProvider` dulu langsung membuka WebSocket sebelum login selesai. Backend
+  menolak dengan kode `1008`, dan client tidak pernah mencoba lagi setelah login.
+  Sekarang koneksi menunggu user terautentikasi dan otomatis reconnect saat
+  login/logout.
+- Session yang kedaluwarsa tidak lagi mematikan realtime permanen; client
+  mencoba ulang secara berkala.
+- `anrouter`/PM2 memakai interpreter yang benar, sehingga backend tidak restart
+  atau gagal karena dependency hilang.
+
+Kalau masih bermasalah:
+
+1. Pastikan membuka UI dan backend di origin yang benar. Development:
+   <http://localhost:5173> (Vite memproxy `/ws` ke 8777). Production:
+   <http://127.0.0.1:8777> (backend menyajikan `dist`).
+2. Jangan membuka `127.0.0.1:5173` kalau Vite bind ke `localhost`/IPv6; gunakan
+   URL yang dicetak Vite.
+3. Cek log: `backend/server.log`, `frontend/dev.log`, atau
+   `pm2 logs Dashboard-Router`.
+4. Pastikan tidak ada dua backend di port berbeda. `anrouter --doctor` dan
+   `ss -ltnp | grep 8777` membantu.
+5. Setelah rebuild frontend, hard-refresh browser agar bundle lama tidak
+   tertahan cache.
+
+### `EADDRINUSE` / port 8777 sudah dipakai
+
+```bash
+pm2 list
+pm2 delete <nama-app-lama>
+ss -ltnp | grep 8777
+anrouter --doctor
+```
+
+Jangan menjalankan `anrouter`, `run.sh`, dan PM2 secara bersamaan pada port yang
+sama. `anrouter` sengaja mendeteksi backend yang sudah berjalan sebagai
+`external` dan tidak akan mematikannya saat Exit.
+
+### PM2 terus restart
+
+Lihat `pm2 logs Dashboard-Router`. Penyebab umum:
+
+- `.venv` belum berisi dependency → jalankan `pip install -r
+  backend/requirements.txt`.
+- Port 8777 dipakai proses lain → hapus app PM2 lama atau pakai `--port`.
+- `frontend/dist/index.html` tidak ada di mode `--prod` → jalankan
+  `npm run build` atau pakai `--build`.
+- Interpreter yang dipilih bukan venv yang benar → set `NETDASH_PYTHON` lalu
+  `pm2 restart ... --update-env`.
+
+### Kick tidak berfungsi
+
+Lihat bagian [Troubleshooting: kick tidak berfungsi](#troubleshooting-kick-tidak-berfungsi)
+di bawah. Ringkasnya: butuh Administrator/root atau `cap_net_raw`, adapter LAN
+yang benar, dan Npcap/libpcap.
+
+---
 ## Setting awal
 
 Buka **Settings**:
@@ -415,7 +750,7 @@ mengenali-nya lewat hostname.
 Yang dilakukan aplikasi:
 
 - Ditambah `type_confident: false` di API. Device tanpa hostname + MAC acak
-  ditandai amber **"perlu dicek"** di kolom Tipe, bukan ditampilkan seolah
+  ditandai label muted **"perlu dicek"** di kolom Tipe, bukan ditampilkan seolah
   diklasifikasi dengan yakin.
 - Panel Device Detail menampilkan penjelasan kenapa tidak bisa dipastikan, dan
  dropdown tipe tersedia untuk memilih manual. Pilihan manual tersimpan dan
@@ -573,20 +908,31 @@ Atau pakai `oui.csv` sendiri lewat field **Oui file** di Settings.
 ## Struktur
 
 ```
+bin/
+  anrouter.js        # command global cross-platform (menu, browser, cleanup)
+lib/
+  runtime.js         # deteksi Python/venv, npm, port, kill process tree
+run-pm2.js           # entrypoint PM2/server (non-interaktif, --prod)
+run.sh               # fallback Linux/macOS: backend saja
+run.ps1              # fallback Windows: backend saja
+package.json         # bin: anrouter, dependency prompts/open
 backend/
+  requirements.txt   # dependency Python lengkap + versi
+  .env.example       # contoh kredensial router
   app/
-    main.py        # FastAPI, semua endpoint, static SPA
-    net.py         # ARP scan, OUI lookup, spoof engine
-    scapy_arp.py   # konstruksi paket ARP (spoof + restore)
-    scanner.py     # background scan loop, WebSocket hub
-    db.py          # model SQLModel (Device, DeviceEvent, KickLog, ScanSample)
-    auth.py        # session cookie + rate limiter
-    config.py      # settings tersimpan di data/config.json
-    oui_data.py    # database OUI IEEE (generated)
+    main.py          # FastAPI, semua endpoint, static SPA
+    net.py           # ARP scan, OUI lookup, spoof engine
+    scapy_arp.py     # konstruksi paket ARP (spoof + restore)
+    scanner.py       # background scan loop, WebSocket hub
+    db.py            # model SQLModel (Device, DeviceEvent, KickLog, ScanSample)
+    auth.py          # session cookie + rate limiter
+    config.py        # settings tersimpan di data/config.json
+    oui_data.py      # database OUI IEEE (generated)
   test_api.sh          # smoke test API
   test_engine.py       # unit test engine + WebSocket
   test_kick_drill.py   # drill kick nyata
 frontend/
+  .env.example       # NETDASH_BACKEND untuk proxy Vite
   src/
     api.ts          # typed API client
     live.tsx        # WebSocket + auth context

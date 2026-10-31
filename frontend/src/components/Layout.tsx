@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth, useLive } from '../live'
 import { api } from '../api'
 import {
@@ -11,7 +11,7 @@ import {
   UiRefresh,
   UiMark,
 } from './icons'
-import { Gauge, Network, Activity, Globe } from 'lucide-react'
+import { Activity, ChevronLeft, Gauge, Globe, Network } from 'lucide-react'
 import Toasts from './Toasts'
 
 const NavIcon = ({ children }: { children: React.ReactNode }) => (
@@ -28,16 +28,13 @@ function InitialAvatar({ name }: { name: string | null }) {
     .join('')
     .toUpperCase()
   return (
-    <span
-      className="inline-flex items-center justify-center w-8 h-8 rounded-[9px] shrink-0 text-[12px] font-semibold"
-      style={{ background: 'rgba(231,179,74,0.14)', color: 'var(--color-accent)' }}
-    >
+    <span className="inline-flex items-center justify-center w-8 h-8 rounded-md shrink-0 text-[12px] font-medium border border-border bg-surface2 text-ink">
       {initials || '?'}
     </span>
   )
 }
 
-/** One sidebar row. NavLink's isActive drives the accent highlight. */
+/** One sidebar row. NavLink's isActive drives the inverted highlight. */
 function Item({
   to,
   children,
@@ -53,9 +50,9 @@ function Item({
       end={to === '/dashboard'}
       className={({ isActive }) => `sidebar-item ${isActive ? 'active' : ''}`}
     >
-      {({ isActive }) => (
+      {() => (
         <>
-          <span style={{ color: isActive ? '#F2F2F3' : 'currentColor' }}>{icon}</span>
+          <span>{icon}</span>
           <span>{children}</span>
         </>
       )}
@@ -126,7 +123,7 @@ function SidebarSearch() {
           onKeyDown={(e) => e.key === 'Enter' && submit()}
           placeholder="Cari menu…"
           aria-label="Cari menu"
-          className="w-full bg-bg border border-border rounded-[9px] pl-9 pr-3 py-2 text-[13px] text-ink placeholder:text-muted2 outline-none transition focus:border-[#3a3a40]"
+          className="w-full bg-surface border border-border rounded-md pl-9 pr-3 py-2 text-[13px] text-ink placeholder:text-muted2 outline-none transition focus:border-bright"
         />
       </div>
       {open && hits.length > 0 && (
@@ -139,10 +136,10 @@ function SidebarSearch() {
                 setOpen(false)
                 setQ('')
               }}
-              className="w-full text-left px-2.5 py-2 rounded-[8px] hover:bg-surface2 transition"
+              className="w-full text-left px-2.5 py-2 rounded-md hover:bg-surface2 transition"
             >
-              <div className="text-[13px] text-[#F2F2F3]">{r.label}</div>
-              <div className="text-[11px] text-[#8B8D93]">{r.hint}</div>
+              <div className="text-[13px] text-ink">{r.label}</div>
+              <div className="text-[11px] text-muted">{r.hint}</div>
             </button>
           ))}
         </div>
@@ -160,19 +157,13 @@ export default function Layout({ children }: { children: ReactNode }) {
     <div className="min-h-screen flex">
       {/* Sidebar: the darkest plane in the app, so the content area reads as
           a lighter surface sitting next to it. */}
-      <aside
-        className="w-[248px] shrink-0 border-r border-border"
-        style={{ background: 'var(--color-surface)' }}
-      >
+      <aside className="w-[248px] shrink-0 border-r border-border bg-bg">
         <div className="sticky top-0 h-screen flex flex-col px-4 py-5">
           <div className="flex items-center gap-2.5 px-1 mb-6">
-            <span
-              className="inline-flex items-center justify-center w-8 h-8 rounded-[7px]"
-              style={{ background: 'var(--color-accent)', color: '#17130a' }}
-            >
+            <span className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border bg-surface2 text-bright">
               <UiMark />
             </span>
-            <span className="font-display font-bold tracking-tight text-[15px]">
+            <span className="font-semibold tracking-tight text-[14px] text-ink">
               AN Telemetry
             </span>
           </div>
@@ -206,7 +197,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           {/* Account card: avatar, name, live state and sign-out together, as
               one bordered unit rather than loose rows of text. */}
           <div className="mt-auto">
-            <div className="flex items-center gap-2.5 rounded-[10px] border border-border bg-surface2 px-2.5 py-2">
+            <div className="flex items-center gap-2.5 rounded-md border border-border bg-surface px-2.5 py-2">
               <InitialAvatar name={username} />
               <div className="min-w-0 flex-1">
                 <div className="text-[13px] text-ink truncate leading-tight">
@@ -241,7 +232,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="flex-1 min-w-0 relative z-[1]">
-        <div className="max-w-[1400px] mx-auto px-8 py-7">{children}</div>
+        <div className="max-w-[1400px] mx-auto px-8 py-8">{children}</div>
       </main>
 
       {/* Live connect/disconnect toasts. Subscribes to the transitions pub/sub
@@ -272,6 +263,28 @@ export function ScanButton({ className = 'btn' }: { className?: string }) {
   )
 }
 
+/**
+ * Plain-text back link used across the app. Deliberately chrome-free: a small
+ * chevron and label share the muted text colour, with only a colour transition
+ * on hover.
+ */
+export function BackLink({
+  to,
+  label,
+  className = '',
+}: {
+  to: string
+  label: string
+  className?: string
+}) {
+  return (
+    <Link to={to} className={`back-link ${className}`.trim()}>
+      <ChevronLeft size={15} strokeWidth={2} aria-hidden="true" />
+      <span>{label}</span>
+    </Link>
+  )
+}
+
 /** Page header used by every page: bold title, muted subtitle, right actions. */
 export function PageHeader({
   title,
@@ -283,10 +296,10 @@ export function PageHeader({
   actions?: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 mb-6">
+    <div className="flex flex-wrap items-center gap-3 mb-8">
       <div className="min-w-0">
         <h1 className="section-title">{title}</h1>
-        {subtitle && <div className="card-sub mt-0.5">{subtitle}</div>}
+        {subtitle && <div className="card-sub mt-1">{subtitle}</div>}
       </div>
       {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
     </div>

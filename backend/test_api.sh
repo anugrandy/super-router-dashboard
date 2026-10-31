@@ -4,8 +4,8 @@ set -u
 # Match the port the backend actually runs on; default 8777 for older setups.
 PORT="${NETDASH_BACKEND:-${NETDASH_PORT:-8777}}"
 BASE="http://127.0.0.1:${PORT}"
-CJ="$LOCALAPPDATA/Temp/netdash_test_c.txt"
-rm -f "$CJ"
+CJ="$(mktemp)"
+trap 'rm -f "$CJ"' EXIT
 PASS=0; FAIL=0
 say() { printf '%s\n' "$*"; }
 chk() { # name expected_substring actual

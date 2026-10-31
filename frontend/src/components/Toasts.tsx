@@ -92,30 +92,30 @@ function Toast({ t, onDone }: { t: Transition; onDone: () => void }) {
     <Link
       to={`/devices/${encodeURIComponent(t.mac)}`}
       onClick={onDone}
-      className="pointer-events-auto flex items-start gap-3 rounded-[12px] border bg-[#131316]/95 px-3.5 py-3 shadow-lg backdrop-blur-sm transition hover:bg-[#17171B]"
+      className="pointer-events-auto flex items-start gap-3 rounded-lg border bg-surface px-4 py-3 transition hover:bg-surface2"
       style={{
         borderColor: fresh
-          ? 'rgba(231,179,74,0.45)'
+          ? 'var(--color-border-strong)'
           : online
-            ? 'rgba(62,210,140,0.28)'
-            : 'rgba(232,96,74,0.28)',
+            ? 'rgba(34,197,94,0.35)'
+            : 'rgba(239,68,68,0.35)',
       }}
     >
       <DeviceTypeChip type={t.device_type} size={30} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span
-            style={{ color: online ? '#3ED28C' : '#E8604A' }}
+            style={{ color: online ? 'var(--color-green)' : 'var(--color-red)' }}
             className="shrink-0"
           >
             {online ? <IconPlug size={13} /> : <IconUnplug size={13} />}
           </span>
-          <span className="text-[13px] font-medium text-[#E6E6E9] truncate">
+          <span className="text-[13px] font-medium text-ink truncate">
             {t.name}
           </span>
           {fresh && <span className="badge badge-warn shrink-0">Baru!</span>}
         </div>
-        <div className="text-[11px] text-[#8B8D93] mt-0.5 truncate">
+        <div className="text-[11px] text-muted mt-0.5 truncate">
           {fresh
             ? `baru pertama kali terlihat${t.ip ? ` di ${t.ip}` : ''}`
             : online
@@ -154,7 +154,7 @@ export default function Toasts() {
         <Toast key={t.mac} t={t} onDone={() => dismiss(t.mac)} />
       ))}
       {items.length > shown.length && (
-        <div className="text-[11px] text-[#58585F] text-right">
+        <div className="text-[11px] text-muted2 text-right">
           +{items.length - shown.length} lainnya
         </div>
       )}
@@ -179,27 +179,26 @@ function WanAlert({ w }: { w: WanEvent }) {
   return (
     <div
       role="alert"
-      className="rounded-[12px] border px-4 py-3.5 shadow-lg backdrop-blur-sm"
+      className="rounded-lg border bg-surface px-4 py-3.5"
       style={{
-        borderColor: down ? 'rgba(232,96,74,0.5)' : 'rgba(62,210,140,0.4)',
-        background: down ? 'rgba(38,18,16,0.97)' : 'rgba(14,32,24,0.97)',
+        borderColor: down ? 'rgba(239,68,68,0.45)' : 'rgba(34,197,94,0.4)',
       }}
     >
       <div className="flex items-start gap-2.5">
         <span
           className="mt-0.5 shrink-0"
-          style={{ color: down ? '#E8604A' : '#3ED28C' }}
+          style={{ color: down ? 'var(--color-red)' : 'var(--color-green)' }}
         >
           {down ? <IconUnplug size={16} /> : <IconPlug size={16} />}
         </span>
         <div className="min-w-0 flex-1">
           <div
             className="text-[14px] font-semibold"
-            style={{ color: down ? '#E8604A' : '#3ED28C' }}
+            style={{ color: down ? 'var(--color-red)' : 'var(--color-green)' }}
           >
             {down ? 'Internet Terputus!' : 'Internet Sudah Pulang'}
           </div>
-          <div className="text-[11px] text-[#8B8D93] mt-0.5 leading-4">
+          <div className="text-[11px] text-muted mt-0.5 leading-4">
             {down
               ? w.reason
                 ? `Penyebab: ${humanReason(w.reason)}`
@@ -210,7 +209,7 @@ function WanAlert({ w }: { w: WanEvent }) {
             to="/connection"
             onClick={() => setOpen(false)}
             className="inline-block mt-2 text-[11px] font-medium underline underline-offset-2 hover:opacity-80"
-            style={{ color: down ? '#E8604A' : '#3ED28C' }}
+            style={{ color: down ? 'var(--color-red)' : 'var(--color-green)' }}
           >
             Lihat detail koneksi
           </Link>
@@ -218,7 +217,7 @@ function WanAlert({ w }: { w: WanEvent }) {
         <button
           onClick={() => setOpen(false)}
           aria-label="Tutup peringatan"
-          className="shrink-0 text-[#8B8D93] hover:text-[#F2F2F3] transition -mt-0.5 -mr-1 p-1"
+          className="shrink-0 text-muted hover:text-ink transition -mt-0.5 -mr-1 p-1"
         >
           <IconClose size={13} />
         </button>

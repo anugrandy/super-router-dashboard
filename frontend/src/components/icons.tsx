@@ -126,19 +126,19 @@ export const TYPE_ICON: Record<string, LucideIcon> = {
   unknown: HelpCircle,
 }
 
-/** Per-type tint, kept muted so the table does not turn into confetti. */
+/** Per-type tint: strictly grayscale. Type is metadata, not state. */
 const TYPE_TINT: Record<string, { bg: string; fg: string }> = {
-  phone: { bg: 'rgba(139,141,147,0.14)', fg: '#8B8D93' },
-  tablet: { bg: 'rgba(139,141,147,0.14)', fg: '#8B8D93' },
-  laptop: { bg: 'rgba(62,210,140,0.13)', fg: '#3ED28C' },
-  desktop: { bg: 'rgba(62,210,140,0.13)', fg: '#3ED28C' },
-  tv: { bg: 'rgba(139,141,147,0.14)', fg: '#8B8D93' },
-  printer: { bg: 'rgba(139,141,147,0.14)', fg: '#8B8D93' },
-  router: { bg: 'rgba(232,96,74,0.13)', fg: '#E8604A' },
-  server: { bg: 'rgba(231,179,74,0.12)', fg: '#E7B34A' },
-  iot: { bg: 'rgba(231,179,74,0.12)', fg: '#E7B34A' },
-  other: { bg: 'rgba(139,141,147,0.10)', fg: '#8B8D93' },
-  unknown: { bg: 'rgba(139,141,147,0.10)', fg: '#8B8D93' },
+  phone: { bg: 'var(--color-surface2)', fg: 'var(--color-muted)' },
+  tablet: { bg: 'var(--color-surface2)', fg: 'var(--color-muted)' },
+  laptop: { bg: 'var(--color-surface2)', fg: 'var(--color-muted)' },
+  desktop: { bg: 'var(--color-surface2)', fg: 'var(--color-muted)' },
+  tv: { bg: 'var(--color-surface2)', fg: 'var(--color-muted)' },
+  printer: { bg: 'var(--color-surface2)', fg: 'var(--color-muted)' },
+  router: { bg: 'var(--color-surface2)', fg: 'var(--color-muted)' },
+  server: { bg: 'var(--color-surface2)', fg: 'var(--color-muted)' },
+  iot: { bg: 'var(--color-surface2)', fg: 'var(--color-muted)' },
+  other: { bg: 'var(--color-surface2)', fg: 'var(--color-muted)' },
+  unknown: { bg: 'var(--color-surface2)', fg: 'var(--color-muted)' },
 }
 
 /** The raw glyph for a device type, with a safe fallback. */
@@ -156,8 +156,9 @@ export function DeviceTypeChip({ type, size = 32 }: { type: string; size?: numbe
       style={{
         width: size,
         height: size,
-        borderRadius: Math.round(size * 0.31),
+        borderRadius: Math.min(6, Math.round(size * 0.2)),
         background: tint.bg,
+        border: '1px solid var(--color-border)',
         color: tint.fg,
       }}
       title={type}
@@ -176,8 +177,8 @@ export const STAT_ICON = {
 } as const
 
 export const STAT_TINT = {
-  total: { bg: 'rgba(139,141,147,0.16)', fg: '#8B8D93' },
-  online: { bg: 'rgba(62,210,140,0.16)', fg: '#3ED28C' },
-  offline: { bg: 'rgba(139,141,147,0.16)', fg: '#8B8D93' },
-  kick: { bg: 'rgba(232,96,74,0.16)', fg: '#E8604A' },
+  total: { bg: 'var(--color-surface2)', fg: 'var(--color-muted)' },
+  online: { bg: 'var(--color-surface2)', fg: 'var(--color-green)' },
+  offline: { bg: 'var(--color-surface2)', fg: 'var(--color-muted)' },
+  kick: { bg: 'var(--color-surface2)', fg: 'var(--color-red)' },
 } as const

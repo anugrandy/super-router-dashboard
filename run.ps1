@@ -1,15 +1,32 @@
+# FALLBACK ONLY. The recommended development launcher is the cross-platform
+# `anrouter` command (bin/anrouter.js, installed with `npm link`).
+#
 # Start the netdash backend cleanly. PowerShell version of run.sh.
-#   .\run.ps1            -> port 8000
+#   .\run.ps1            -> port 8777
 #   .\run.ps1 -Port 9000
 #
 # Kills stale uvicorn processes first, so you never end up with two backends
 # and a UI silently talking to the wrong one.
 
-param([int]$Port = 8000)
+param([int]$Port = 8777)
 
 $ErrorActionPreference = "Continue"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
+
+$Python = Join-Path $Root ".venv\Scripts\python.exe"
+if (-not (Test-Path $Python)) {
+    Write-Host "run.ps1: $Python tidak ditemukan. Buat venv root dulu:" -ForegroundColor Red
+    Write-Host "  py -3 -m venv .venv"
+    Write-Host "  .venv\Scripts\python.exe -m pip install -r backend\requirements.txt"
+    exit 1
+}
+& $Python -c "import fastapi, uvicorn, cryptography, scapy, sqlmodel, httpx, psutil, dotenv, itsdangerous, websockets" 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "run.ps1: dependency Python belum lengkap di .venv" -ForegroundColor Red
+    Write-Host "  .venv\Scripts\python.exe -m pip install -r backend\requirements.txt"
+    exit 1
+}
 
 Write-Host "=== killing any netdash uvicorn still running ===" -ForegroundColor Cyan
 $procs = Get-CimInstance Win32_Process -Filter "Name like '%python%'" |
@@ -35,7 +52,7 @@ if ($busy) {
 Write-Host "  clean"
 
 # A production build left in frontend/dist is served by the backend's SPA
-# fallback on :8000 and silently shadows every route added since it was built.
+# fallback on :8777 and silently shadows every route added since it was built.
 # Development happens on the Vite dev server, so move it aside rather than let a
 # days-old bundle masquerade as the current app.
 $staleDist = Join-Path $Root "frontend\dist"
@@ -47,7 +64,7 @@ if (Test-Path $staleDist) {
     Write-Host ""
     Write-Host "=== stale frontend/dist moved aside ===" -ForegroundColor Cyan
     Write-Host ("  built {0} ago - moved to frontend\dist.stale" -f [int]$age.TotalHours) -ForegroundColor Yellow
-    Write-Host "  (:8000 no longer serves an out-of-date bundle; use :5173)" -ForegroundColor Yellow
+    Write-Host "  (:8777 no longer serves an out-of-date bundle; use :5173)" -ForegroundColor Yellow
 }
 
 Write-Host ""

@@ -2,34 +2,41 @@
 
 /* ============================================================================
    AN Telemetry design tokens
-   Single source of truth for the visual language. Every colour, radius and
-   font in the app resolves from here, so a value only ever changes in one
-   place and components stay free of hardcoded hex.
+   Grayscale-first dark UI: pure black ground, hairline borders, a single
+   inverted (white-on-black) primary treatment. Colour is reserved for state:
+   green = online/success, red = offline/alert. No brand accent exists.
    ========================================================================== */
 
 @theme {
-  /* Surfaces: neutral charcoal, no blue cast. The sidebar sits at --surface,
-     the app background at --bg, so the content plane reads lighter than the
-     chrome beside it. */
-  --color-bg: #0a0a0b; /* app background */
-  --color-surface: #131316; /* cards, sidebar */
-  --color-surface2: #17171b; /* hover fills, active nav, avatar tiles */
-  --color-border: #232327; /* the single 1px hairline used everywhere */
+  /* Surfaces, darkest to lightest. The page is #000, cards are a barely
+     lifted #0A0A0A, and #111 is used for hover/nested fills only. */
+  --color-bg: #000000;
+  --color-surface: #0a0a0a;
+  --color-surface2: #111111;
 
-  /* Text ramp: three steps only, so hierarchy stays deliberate. */
-  --color-ink: #f2f2f3; /* primary */
-  --color-muted: #8b8d93; /* labels, secondary */
-  --color-muted2: #58585f; /* captions, timestamps */
+  /* Hairlines. --border is the default; --border-strong appears on hover,
+     focus and active states. No shadows are used to separate surfaces. */
+  --color-border: #1f1f1f;
+  --color-border-strong: #2e2e2e;
 
-  /* Accents. Amber is deliberately scarce - logo and one or two small marks
-     only. Green carries every positive state; red is reserved for genuine
-     alerts (outage, active kick) so it never becomes decoration. */
-  --color-accent: #e7b34a;
-  --color-green: #3ed28c;
-  --color-red: #e8604a;
+  /* Text ramp: soft white for body, pure white reserved for key headings and
+     the inverted primary button. */
+  --color-ink: #ededed;
+  --color-bright: #ffffff;
+  --color-muted: #8f8f8f;
+  --color-muted2: #525252;
 
-  --radius-card: 12px;
-  --radius-chip: 10px;
+  /* State only. */
+  --color-green: #22c55e;
+  --color-red: #ef4444;
+
+  --radius-card: 8px;
+  --radius-chip: 6px;
+
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+  --font-mono: "Geist Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular,
+    "SF Mono", Menlo, Consolas, monospace;
 }
 
 html {
@@ -41,19 +48,16 @@ body {
   background: var(--color-bg);
   color: var(--color-ink);
 
-  /* IBM Plex Sans for running text, Space Grotesk for headings and figures.
-     Both have a real fallback stack so nothing reflows badly on a slow link. */
-  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", sans-serif;
-  font-size: 15px;
+  /* One family for headings and body; hierarchy comes from weight, not from a
+     second display face. Mono is used only for data. */
+  font-family: var(--font-sans);
+  font-size: 14px;
   line-height: 1.55;
   font-weight: 400;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Space Grotesk carries every heading and every large figure: it has the
-   geometric, slightly technical read the reference uses. */
 h1,
 h2,
 h3,
@@ -62,28 +66,38 @@ h4,
 .stat-value,
 .card-title,
 .section-title {
-  font-family: "Space Grotesk", "IBM Plex Sans", ui-sans-serif, system-ui,
-    sans-serif;
+  font-family: var(--font-sans);
 }
 
-/* Numbers that change in place must not reflow the layout around them. */
+::selection {
+  background: var(--color-bright);
+  color: var(--color-bg);
+}
+
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 1px solid var(--color-bright);
+  outline-offset: 2px;
+}
+
+/* Numbers and technical values never reflow when they change. */
 .stat-value,
 .mono,
 .tabular {
   font-variant-numeric: tabular-nums;
 }
 
+/* Every IP, MAC, timestamp, ID and large figure uses Geist Mono. */
 .mono {
-  font-family: ui-monospace, SFTMono-Regular, "SF Mono", Menlo, Consolas,
-    monospace;
+  font-family: var(--font-mono);
   font-size: 0.8125rem;
-  font-weight: 450;
+  font-weight: 400;
+  letter-spacing: -0.01em;
 }
 
 /* ---------------------------------------------------------------- surfaces */
 
-/* Flat. No gradient, no shadow, no coloured left border - a card is a surface
-   with a hairline, and nothing else. */
+/* A card is a surface plus a 1px hairline. No gradient, no shadow, no
+   coloured edge. Radius stays small (8px) so the UI reads sharp. */
 .card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -91,52 +105,51 @@ h4,
 }
 
 .card-hover {
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: border-color 0.15s ease;
 }
 .card-hover:hover {
-  background: var(--color-surface2);
-  border-color: #2c2c31;
+  border-color: var(--color-border-strong);
 }
 
 .card-title {
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--color-ink);
 }
 
 .card-sub {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 400;
   color: var(--color-muted);
 }
 
 .section-title {
   font-size: 1.375rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: var(--color-ink);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--color-bright);
 }
 
 /* -------------------------------------------------------------- stat cards */
 
-/* Uppercase micro-label, big number, quiet caption. The figure is the focus;
-   no coloured icon tile competes with it. */
+/* Uppercase micro-label above a mono figure. */
 .stat-label {
-  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.07em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-muted);
 }
 
 .stat-value {
-  /* Callers set the size with a text-[...] utility; this carries weight,
-     tracking and colour only. */
-  font-weight: 700;
+  /* Callers set the size with a text-[...] utility; this carries the mono
+     face, weight, tracking and colour only. */
+  font-family: var(--font-mono);
+  font-weight: 500;
   line-height: 1.08;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   color: var(--color-ink);
 }
 .stat-value-green {
@@ -152,9 +165,8 @@ h4,
   color: var(--color-muted2);
 }
 
-/* A stat value that is a phrase rather than a number ("1h 16j 30m"). The tight
-   tracking above is for digits; on words it closes the gaps and reads as one
-   run-on token, hence the explicit override. */
+/* A stat value that is a phrase rather than a number ("1h 16j 30m"). Mono is
+   kept deliberately: it is still a machine-reported figure. */
 .stat-value-text {
   letter-spacing: normal;
 }
@@ -165,48 +177,50 @@ h4,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
+  gap: 0.4rem;
   border-radius: var(--radius-chip);
-  padding: 0.5rem 0.9rem;
-  font-size: 0.875rem;
+  padding: 8px 14px;
+  font-size: 13px;
   font-weight: 500;
-  font-family: inherit;
+  font-family: var(--font-sans);
   border: 1px solid var(--color-border);
-  background: var(--color-surface2);
+  background: transparent;
   color: var(--color-ink);
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
 }
 .btn:hover:not(:disabled) {
-  background: #1e1e22;
-  border-color: #2c2c31;
+  background: var(--color-surface2);
+  border-color: var(--color-border-strong);
 }
 .btn:disabled {
-  opacity: 0.42;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-/* Amber, used once per view at most. */
+/* The signature inverted button: pure white ground, black label. */
 .btn-primary {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: #17130a;
-  font-weight: 600;
+  background: var(--color-bright);
+  border-color: var(--color-bright);
+  color: var(--color-bg);
+  font-weight: 500;
 }
 .btn-primary:hover:not(:disabled) {
-  background: #f0c262;
-  border-color: #f0c262;
+  background: var(--color-bright);
+  border-color: var(--color-bright);
+  opacity: 0.88;
 }
 
+/* Destructive action: neutral surface, red only as the state colour. */
 .btn-danger {
-  background: rgba(232, 96, 74, 0.12);
-  border-color: rgba(232, 96, 74, 0.32);
-  color: #ef8877;
+  background: transparent;
+  border-color: rgba(239, 68, 68, 0.35);
+  color: var(--color-red);
 }
 .btn-danger:hover:not(:disabled) {
-  background: rgba(232, 96, 74, 0.2);
-  border-color: rgba(232, 96, 74, 0.5);
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.55);
 }
 
 .btn-ghost {
@@ -217,16 +231,40 @@ h4,
 .btn-ghost:hover:not(:disabled) {
   background: var(--color-surface2);
   border-color: var(--color-border);
+  color: var(--color-ink);
+}
+
+/* Back navigation: text-only link, no box or background. */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px;
+  margin-left: -4px;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+.back-link:hover {
+  color: var(--color-ink);
+}
+.back-link svg {
+  color: currentColor;
 }
 
 .input {
   width: 100%;
-  background: var(--color-bg);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-chip);
-  padding: 0.55rem 0.75rem;
-  font-size: 0.9375rem;
-  font-family: inherit;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: var(--font-sans);
   color: var(--color-ink);
   transition: border-color 0.15s;
 }
@@ -235,72 +273,87 @@ h4,
 }
 .input:focus {
   outline: none;
-  border-color: #3a3a40;
+  border-color: var(--color-bright);
 }
 select.input {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b8d93' d='M2.5 4.5L6 8l3.5-3.5z'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238F8F8F' d='M2.5 4.5L6 8l3.5-3.5z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.7rem center;
   padding-right: 2rem;
 }
+/* Technical form values (subnet, MAC, path, numeric limits) use mono too.
+   Placed after .input so the family is not overridden by the base rule. */
+.input.mono,
+textarea.mono {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
 
 /* ------------------------------------------------------------------ badges */
 
-/* Pill, 5px dot, quiet text. Offline is neutral rather than red: a device
-   being asleep is normal, and red is held back for real alerts. */
+/* Status pill: 1px outline, small dot, no solid fill. */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  border-radius: 20px;
-  padding: 0.14rem 0.6rem;
-  font-size: 0.7rem;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
   font-weight: 500;
+  line-height: 1.5;
   white-space: nowrap;
-  border: 1px solid transparent;
-}
-
-.badge-online {
-  background: rgba(62, 210, 140, 0.1);
-  color: #6fdaa9;
-  border-color: rgba(62, 210, 140, 0.2);
-}
-.badge-offline {
-  background: var(--color-surface2);
+  border: 1px solid var(--color-border);
+  background: transparent;
   color: var(--color-muted);
-  border-color: var(--color-border);
-}
-.badge-kicked {
-  background: rgba(232, 96, 74, 0.13);
-  color: #ef8877;
-  border-color: rgba(232, 96, 74, 0.28);
-}
-.badge-gateway,
-.badge-accent {
-  background: var(--color-surface2);
-  color: var(--color-ink);
-  border-color: var(--color-border);
-}
-.badge-warn {
-  background: rgba(231, 179, 74, 0.12);
-  color: var(--color-accent);
-  border-color: rgba(231, 179, 74, 0.26);
 }
 
-.trend-up {
-  color: var(--color-green);
-}
-.trend-down {
-  color: var(--color-red);
-}
-
-.badge-pulse::before {
+.badge::before {
   content: "";
   width: 5px;
   height: 5px;
   border-radius: 999px;
   background: currentColor;
+  flex-shrink: 0;
+}
+
+.badge-online {
+  color: var(--color-green);
+  border-color: rgba(34, 197, 94, 0.35);
+}
+.badge-offline {
+  color: var(--color-muted);
+  border-color: var(--color-border);
+}
+.badge-kicked {
+  color: var(--color-red);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.badge-gateway,
+.badge-accent {
+  color: var(--color-ink);
+  border-color: var(--color-border-strong);
+}
+.badge-gateway::before,
+.badge-accent::before {
+  display: none;
+}
+/* Warnings stay grayscale: hierarchy comes from the border, not a hue. */
+.badge-warn {
+  color: var(--color-bright);
+  border-color: var(--color-border-strong);
+}
+
+.trend-up {
+  color: var(--color-green);
+  border-color: rgba(34, 197, 94, 0.35);
+}
+.trend-down {
+  color: var(--color-red);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.badge-pulse::before {
   animation: netdash-pulse 1.8s ease-in-out infinite;
 }
 @keyframes netdash-pulse {
@@ -319,18 +372,18 @@ table.net {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 0.9375rem;
+  font-size: 13px;
   font-weight: 400;
-  color: #d6d6da;
+  color: var(--color-ink);
 }
 table.net thead th {
   text-align: left;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   color: var(--color-muted);
-  padding: 0.7rem 1rem;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--color-border);
   cursor: pointer;
   user-select: none;
@@ -340,7 +393,7 @@ table.net thead th:hover {
   color: var(--color-ink);
 }
 table.net tbody td {
-  padding: 0.7rem 1rem;
+  padding: 11px 16px;
   border-bottom: 1px solid var(--color-border);
   vertical-align: middle;
 }
@@ -350,37 +403,31 @@ table.net tbody tr {
 table.net tbody tr:hover {
   background: var(--color-surface2);
 }
-table.net tbody tr.row-kicked {
-  background: rgba(232, 96, 74, 0.05);
-}
-table.net tbody tr.row-kicked:hover {
-  background: rgba(232, 96, 74, 0.08);
-}
 table.net tbody tr:last-child td {
   border-bottom: none;
 }
 
 /* ------------------------------------------------------------------ layout */
 
-/* Active row is a surface shift, not a colour wash. */
+/* Active navigation is inverted: white ground, black label. */
 .sidebar-item {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
-  padding: 0.5rem 0.7rem;
-  border-radius: 8px;
-  font-size: 0.875rem;
+  gap: 0.65rem;
+  padding: 8px 10px;
+  border-radius: var(--radius-chip);
+  font-size: 13px;
   font-weight: 500;
   color: var(--color-muted);
   transition: background 0.15s, color 0.15s;
 }
 .sidebar-item:hover {
-  background: #1a1a1e;
+  background: var(--color-surface2);
   color: var(--color-ink);
 }
 .sidebar-item.active {
-  background: var(--color-surface2);
-  color: var(--color-ink);
+  background: var(--color-bright);
+  color: var(--color-bg);
   font-weight: 500;
 }
 
@@ -388,7 +435,7 @@ table.net tbody tr:last-child td {
 
 /* Recharts ships a loud default; these rein it in to the flat theme. */
 .recharts-cartesian-grid line {
-  stroke: #1c1c20;
+  stroke: var(--color-border);
 }
 .recharts-text {
   fill: var(--color-muted2);
@@ -398,8 +445,25 @@ table.net tbody tr:last-child td {
   outline: none;
 }
 .recharts-default-tooltip {
-  background: var(--color-surface2) !important;
-  border: 1px solid var(--color-border) !important;
+  background: var(--color-surface) !important;
+  border: 1px solid var(--color-border-strong) !important;
   border-radius: var(--radius-chip) !important;
   font-size: 0.75rem !important;
+}
+
+/* Minimal scrollbars, matching the hairline language. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
 }

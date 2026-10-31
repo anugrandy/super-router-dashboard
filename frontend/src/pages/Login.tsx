@@ -31,15 +31,12 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 relative z-[1]">
-      <form onSubmit={submit} className="card w-full max-w-sm p-7 p-8">
+      <form onSubmit={submit} className="card w-full max-w-sm p-5">
         <div className="flex items-center gap-2.5 mb-1">
-          <span
-            className="inline-flex items-center justify-center w-9 h-9 rounded-[7px]"
-            style={{ background: 'var(--color-accent)', color: '#17130a' }}
-          >
+          <span className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-border bg-surface2 text-bright">
             <UiMark size={19} />
           </span>
-          <h1 className="font-display text-xl font-bold tracking-tight">
+          <h1 className="text-xl font-semibold tracking-tight text-bright">
             AN Telemetry
           </h1>
         </div>
@@ -72,12 +69,7 @@ export default function Login() {
         />
 
         {err && (
-          <div className="mb-4 rounded-[10px] border px-3 py-2 text-sm"
-              style={{
-                borderColor: 'rgba(232,96,74,0.32)',
-                background: 'rgba(232,96,74,0.07)',
-                color: '#ef8877',
-              }}>
+          <div className="mb-4 rounded-md border border-red/40 px-3 py-2 text-sm text-red">
             {err}
           </div>
         )}

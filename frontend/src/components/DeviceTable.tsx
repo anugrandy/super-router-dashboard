@@ -28,7 +28,7 @@ function KickedBadge({ started }: { started: number }) {
   const left = Math.max(0, Math.round(elapsedOf(started)))
   return (
     <span
-      className="badge badge-kicked badge-pulse"
+      className="badge badge-kicked badge-pulse mono"
       title="Traffic sedang diblokir (blokir router + ARP spoof)"
     >
       Di-kick · {left}s
@@ -49,7 +49,7 @@ const DeviceRow = memo(function DeviceRow({ d }: { d: Device }) {
       <td>
         <Link
           to={`/devices/${encodeURIComponent(d.mac)}`}
-          className="text-[#8B8D93] hover:text-[#8B8D93] text-lg leading-none"
+          className="text-muted2 hover:text-bright text-lg leading-none"
           title="Detail device"
         >
           ›
@@ -61,35 +61,35 @@ const DeviceRow = memo(function DeviceRow({ d }: { d: Device }) {
           <div className="min-w-0">
             <Link
               to={`/devices/${encodeURIComponent(d.mac)}`}
-              className="font-medium text-[#E6E6E9] hover:text-[#8B8D93] transition"
+              className="font-medium text-ink hover:text-muted transition"
             >
               {displayName(d)}
             </Link>
-            <div className="mono text-[#58585F]">{d.mac}</div>
+            <div className="mono text-muted2">{d.mac}</div>
           </div>
         </div>
       </td>
       <td>
-        <div className="mono text-[#8B8D93]">{d.ip || '-'}</div>
+        <div className="mono text-muted">{d.ip || '-'}</div>
         {/* The AP the router reports for this client - not a default. */}
         {d.ssid_name && (
-          <div className="text-[11px] text-[#58585F]">{d.ssid_name}</div>
+          <div className="text-[11px] text-muted2">{d.ssid_name}</div>
         )}
       </td>
-      <td className="text-[#8B8D93] max-w-[220px] truncate" title={d.vendor}>
+      <td className="text-muted max-w-[220px] truncate" title={d.vendor}>
         {d.vendor || '-'}
       </td>
       <td className="text-[13px]">
-        <span className={d.type_confident ? 'text-[#8B8D93]' : 'text-[#E7B34A]'}>
+        <span className="text-muted">
           {TYPE_LABEL[d.device_type] || d.device_type}
         </span>
         {/* No hostname and a randomized MAC means the type is a guess; say so
             instead of showing a confident-looking label. */}
         {!d.type_confident && (
-          <div className="text-[10px] text-[#58585F] mt-0.5">perlu dicek</div>
+          <div className="text-[10px] text-muted2 mt-0.5">perlu dicek</div>
         )}
       </td>
-      <td className="text-[#8B8D93] text-xs">{fmtAge(d.last_seen)}</td>
+      <td className="mono text-[11px] text-muted">{fmtAge(d.last_seen)}</td>
       <td>
         <div className="flex flex-wrap gap-1.5">
           {d.kicked != null ? (
@@ -159,7 +159,7 @@ export default function DeviceTable({ devices }: { devices: Device[] }) {
       }}
     >
       {label}
-      {sort === k && <span className="ml-1 text-[#F2F2F3]">{asc ? '↑' : '↓'}</span>}
+      {sort === k && <span className="ml-1 text-bright">{asc ? '↑' : '↓'}</span>}
     </th>
   )
 
@@ -172,23 +172,23 @@ export default function DeviceTable({ devices }: { devices: Device[] }) {
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
-        <div className="flex gap-1 p-1 rounded-[10px] bg-bg/60 border border-border">
+        <div className="flex gap-1 p-1 rounded-md bg-surface border border-border">
           {(['all', 'online', 'offline', 'kicked'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-[13px] font-medium capitalize transition ${
+              className={`px-3 py-1.5 rounded-[4px] text-[12px] font-medium capitalize transition ${
                 filter === f
-                  ? 'bg-surface2 text-[#F2F2F3]'
-                  : 'text-[#8B8D93] hover:text-[#F2F2F3] hover:bg-surface2'
+                  ? 'bg-bright text-bg'
+                  : 'text-muted hover:text-ink hover:bg-surface2'
               }`}
             >
               {f === 'all' ? 'Semua' : f === 'kicked' ? 'Di-kick' : f}
             </button>
           ))}
         </div>
-        <span className="ml-auto text-xs text-[#8B8D93]">
-          <span className="text-[#8B8D93]">{rows.length}</span> device
+        <span className="ml-auto text-xs text-muted">
+          <span className="mono text-ink">{rows.length}</span> device
         </span>
       </div>
 
@@ -216,7 +216,7 @@ export default function DeviceTable({ devices }: { devices: Device[] }) {
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-center text-[#8B8D93] py-12">
+                <td colSpan={7} className="text-center text-muted py-12">
                   Belum ada device yang cocok. Ubah subnet di Settings lalu scan.
                 </td>
               </tr>

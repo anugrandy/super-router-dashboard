@@ -33,7 +33,7 @@ export default function App() {
         <LiveProvider>
           <Suspense
             fallback={
-              <div className="min-h-screen grid place-items-center text-sm text-[#8B8D93]">
+              <div className="min-h-screen grid place-items-center text-sm text-muted">
                 Memuat…
               </div>
             }
