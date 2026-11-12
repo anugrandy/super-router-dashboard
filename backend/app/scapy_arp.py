@@ -43,6 +43,41 @@ def _import_scapy():
     return ARP, Ether, conf, sendp
 
 
+def _reload_scapy_state() -> None:
+    """Refresh scapy's cached interface and route tables.
+
+    scapy snapshots both at import time. On a laptop the Wi-Fi adapter can
+    reconnect with a new DHCP address and even a new randomized MAC while the
+    process keeps running, leaving the cached ``wlan0`` with an empty IP. The
+    resolver then falls through to loopback, the ARP sweep runs on ``lo``,
+    returns nothing, and the scanner falls back to the OS cache. Devices look
+    like they flap because the sweep is no longer reaching the LAN.
+    """
+    try:
+        from scapy.all import conf  # type: ignore
+    except Exception:
+        return
+    try:
+        conf.ifaces.reload()
+    except Exception as e:  # noqa: BLE001 - best effort, older scapy builds
+        log.debug("scapy interface reload failed: %s", e)
+    try:
+        conf.route.resync()
+    except Exception as e:  # noqa: BLE001
+        log.debug("scapy route resync failed: %s", e)
+
+
+def _route_source_matches(local_ip: str) -> bool:
+    """Whether scapy's cached default route still uses our LAN address."""
+    try:
+        from scapy.all import conf  # type: ignore
+
+        _iface, src, _gw = conf.route.route("1.1.1.1")
+        return str(src) == str(local_ip)
+    except Exception:
+        return False
+
+
 def resolve_iface(local_ip: str | None = None, name_hint: str | None = None):
     """Return the scapy NetworkInterface bound to the LAN.
 
@@ -64,6 +99,26 @@ def resolve_iface(local_ip: str | None = None, name_hint: str | None = None):
     except Exception as e:
         log.warning("could not enumerate interfaces: %s", e)
         return None
+
+    # A matching interface name is not enough after the adapter reconnected:
+    # the cached object can carry the old IP/MAC. Reload when no interface
+    # currently holds the address the OS says we should use.
+    if local_ip and not any(
+        str(getattr(i, "ip", "") or "") == str(local_ip) for i in ifaces
+    ):
+        _reload_scapy_state()
+        try:
+            ifaces = list(conf.ifaces.values())
+        except Exception:
+            pass
+    elif local_ip and not _route_source_matches(str(local_ip)):
+        # Interface data is current but scapy still routes through a stale
+        # source address. Rebuild the route table only; no need to re-enumerate.
+        try:
+            conf.route.resync()
+        except Exception:
+            pass
+
     if not ifaces:
         return None
 
@@ -93,6 +148,9 @@ def resolve_iface(local_ip: str | None = None, name_hint: str | None = None):
 def describe_interfaces() -> list[dict]:
     """Interface inventory, for the Settings page and diagnostics."""
     out = []
+    # The Settings page is where a stale interface list is most confusing, so
+    # always show what the OS has now rather than what scapy cached at import.
+    _reload_scapy_state()
     try:
         from scapy.all import conf  # type: ignore
 

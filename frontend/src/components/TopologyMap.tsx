@@ -1,7 +1,8 @@
-import { memo, useMemo } from 'react'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import type { Device } from '../api'
-import { DeviceTypeChip } from './icons'
+import { DeviceChip } from './icons'
 import { Router } from 'lucide-react'
 import { displayName } from '../api'
 
@@ -112,6 +113,7 @@ const Node = memo(function Node({
 })
 
 export default function TopologyMap({ devices, routerName, gatewayMac }: Props) {
+  const { t } = useTranslation()
   // The router is the hub; clients are the rest. Derive membership from MACs so
   // an unrelated state update cannot invalidate the layout memo.
   const clients = useMemo(
@@ -128,6 +130,15 @@ export default function TopologyMap({ devices, routerName, gatewayMac }: Props) 
     [layoutKey],
   )
 
+  // On a phone the SVG is wider than the viewport. Start centred on the router
+  // hub rather than on the empty left edge of the ring.
+  const scroller = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = scroller.current
+    if (!el || el.scrollWidth <= el.clientWidth) return
+    el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2
+  }, [layoutKey])
+
   const online = clients.filter((d) => d.online).length
   const kicked = clients.filter((d) => d.kicked != null).length
 
@@ -135,20 +146,20 @@ export default function TopologyMap({ devices, routerName, gatewayMac }: Props) 
     <div className="card p-5">
       <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
         <div>
-          <h2 className="card-title">Topologi Jaringan</h2>
+          <h2 className="card-title">{t('topologyMap.title')}</h2>
           <p className="card-sub mt-0.5">
-            {online} online · {clients.length - online} offline
-            {kicked > 0 ? ` · ${kicked} di-kick` : ''}
+            {t('topologyMap.summary', { online, offline: clients.length - online })}
+            {kicked > 0 ? t('topologyMap.kicked', { n: kicked }) : ''}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted">
           <span className="inline-flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#22C55E' }} />
-            Online
+            {t('topologyMap.online')}
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#525252' }} />
-            Offline
+            {t('topologyMap.offline')}
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span
@@ -158,18 +169,22 @@ export default function TopologyMap({ devices, routerName, gatewayMac }: Props) 
                 border: '1px dashed #EF4444',
               }}
             />
-            Di-kick
+            {t('topologyMap.kickedLabel')}
           </span>
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <p className="mb-2 text-[11px] text-muted2 sm:hidden">
+        {t('topologyMap.scrollHint')}
+      </p>
+
+      <div ref={scroller} className="-mx-5 overflow-x-auto px-5">
         <svg
           viewBox={`0 0 ${W} ${H}`}
-          className="w-full"
+          className="w-full min-w-[680px]"
           style={{ maxHeight: 560 }}
           role="img"
-          aria-label="Diagram topologi jaringan"
+          aria-label={t('topologyMap.aria')}
         >
           {/* Links first so nodes paint above them. */}
           {positions.map((p, i) => {
@@ -227,14 +242,20 @@ export default function TopologyMap({ devices, routerName, gatewayMac }: Props) 
       {/* Legend row of chips doubles as a compact, accessible list. */}
       <ul className="mt-4 flex flex-wrap gap-2">
         {clients.map((d) => (
-          <li key={d.mac}>
+          <li key={d.mac} className="max-w-full">
             <Link
               to={`/devices/${encodeURIComponent(d.mac)}`}
-              className="inline-flex items-center gap-2 rounded-md border border-border px-2 py-1 hover:border-border-strong transition"
+              className="inline-flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5 min-h-9 hover:border-border-strong transition"
             >
-              <DeviceTypeChip type={d.device_type} size={22} />
+              <DeviceChip
+                type={d.device_type}
+                vendor={d.vendor}
+                hostname={d.hostname}
+                brandOverride={d.brand_override}
+                size={22}
+              />
               <span
-                className={`text-[12px] ${
+                className={`text-[12px] truncate max-w-[150px] ${
                   d.online ? 'text-ink' : 'text-muted'
                 }`}
               >
@@ -249,7 +270,11 @@ export default function TopologyMap({ devices, routerName, gatewayMac }: Props) 
                       : 'badge-offline'
                 }`}
               >
-                {d.kicked != null ? 'kick' : d.online ? 'on' : 'off'}
+                {d.kicked != null
+                  ? t('topologyMap.kickedLabel')
+                  : d.online
+                    ? t('topologyMap.online')
+                    : t('topologyMap.offline')}
               </span>
             </Link>
           </li>

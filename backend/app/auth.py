@@ -69,7 +69,13 @@ def current_username(request: Request) -> str:
         data = s.loads(token, max_age=7 * 24 * 3600)
     except (BadSignature, SignatureExpired):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sesi kedaluwarsa")
-    return data.get("u", "")
+    name = data.get("u", "")
+    # A token issued for the previous username must not keep working after the
+    # account is renamed. The profile endpoint re-issues this browser's cookie;
+    # every other session is expected to sign in again.
+    if not name or name != config_store.settings.username:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sesi tidak valid")
+    return name
 
 
 def require_auth(request: Request) -> str:

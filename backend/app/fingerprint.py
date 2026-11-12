@@ -42,6 +42,174 @@ ALL_TYPES = (
     T_OTHER,
 )
 
+# ---------------------------------------------------------------- OS guessing
+#
+# Passive OS detection is evidence-based, never certain. TTL separates broad
+# families (Windows 128, Unix-like 64, network gear 255), while a hostname can
+# name the platform. Confidence is reported separately so the UI can say
+# "perkiraan" instead of pretending the guess is a fact.
+
+OS_WINDOWS = "Windows"
+OS_LINUX = "Linux"
+OS_ANDROID = "Android"
+OS_MACOS = "macOS"
+OS_IOS = "iOS"
+OS_TVOS = "tvOS"
+OS_ANDROID_TV = "Android TV"
+OS_TIZEN = "Tizen"
+OS_WEBOS = "webOS"
+OS_UNIX = "Linux/Unix"
+OS_NETWORK = "Router/Network"
+OS_UNKNOWN = ""
+
+CONF_HIGH = "high"
+CONF_MEDIUM = "medium"
+CONF_LOW = "low"
+
+_ANDROID_HOST_HINTS = (
+    "android", "galaxy", "redmi", "xiaomi", "poco", "oppo", "realme", "vivo",
+    "tecno", "itel", "infinix", "oneplus", "pixel", "sm-", "moto g", "moto e",
+    "zenfone", "xperia", "hmd", "nokia",
+)
+
+_LINUX_HOST_HINTS = (
+    "linux", "ubuntu", "debian", "fedora", "centos", "kali", "manjaro",
+    "archlinux", "opensuse", "raspbian", "raspberry", "alpine", "rocky",
+    "almalinux", "endeavouros", "pop-os", "popos", "mint",
+)
+
+
+def ttl_family(ttl: int | None) -> str:
+    """Coarse OS family from an observed TTL (initial TTL minus hops)."""
+    if ttl is None:
+        return ""
+    if ttl >= 250:
+        return OS_NETWORK
+    if 100 <= ttl <= 140:
+        return OS_WINDOWS
+    if 32 <= ttl <= 80:
+        return OS_UNIX
+    return ""
+
+
+def _os_compatible(os_name: str, ttl_os: str) -> bool:
+    if not os_name or not ttl_os:
+        return False
+    if os_name == OS_WINDOWS:
+        return ttl_os == OS_WINDOWS
+    if os_name == OS_NETWORK:
+        return ttl_os == OS_NETWORK
+    return ttl_os == OS_UNIX
+
+
+def _vendor_os(vendor: str, device_type: str) -> tuple[str, str]:
+    """OS implied by the OUI vendor alone, with a deliberately weak label."""
+    ven = (vendor or "").lower()
+    if not ven:
+        return "", ""
+    if ven.startswith("apple"):
+        if device_type == T_PHONE:
+            return OS_IOS, "vendor Apple + tipe HP"
+        if device_type == T_TV:
+            return OS_TVOS, "vendor Apple + tipe TV"
+        if device_type in (T_LAPTOP, T_DESKTOP):
+            return OS_MACOS, "vendor Apple + tipe komputer"
+        return "", ""
+    if "microsoft" in ven:
+        return OS_WINDOWS, "vendor Microsoft"
+    if "raspberry pi" in ven or "raspberrypi" in ven:
+        return OS_LINUX, "vendor Raspberry Pi"
+    if device_type == T_TV:
+        if "samsung" in ven:
+            return OS_TIZEN, "vendor Samsung + tipe TV"
+        if ven.startswith("lg") or "lg electronics" in ven:
+            return OS_WEBOS, "vendor LG + tipe TV"
+        if any(v in ven for v in ("sony", "tcl", "hisense", "philips", "sharp")):
+            return OS_ANDROID_TV, "vendor TV (sering Android TV)"
+    return "", ""
+
+
+def guess_os(
+    hostname: str = "",
+    vendor: str = "",
+    ttl: int | None = None,
+    device_type: str = "",
+) -> tuple[str, str, str]:
+    """Return ``(os, confidence, evidence)`` for one device.
+
+    Confidence is one of ``high``/``medium``/``low`` or empty when there is no
+    usable signal. A bare TTL is only ever ``low``: 64 says "Unix-like", not
+    which of Linux/Android/macOS/iOS it is.
+    """
+    host = (hostname or "").strip().lower()
+    host_os = ""
+    host_conf = ""
+    host_ev = ""
+
+    # Strong Apple hostnames.
+    if _has(host, ("iphone", "ipod")):
+        host_os, host_conf, host_ev = OS_IOS, CONF_HIGH, "hostname iPhone/iPod"
+    elif "ipad" in host:
+        host_os, host_conf, host_ev = OS_IOS, CONF_HIGH, "hostname iPad"
+    elif _has(host, ("apple tv", "appletv", "apple-tv")):
+        host_os, host_conf, host_ev = OS_TVOS, CONF_HIGH, "hostname Apple TV"
+    elif _has(host, ("macbook", "imac", "mac mini", "macmini", "powerbook")):
+        host_os, host_conf, host_ev = OS_MACOS, CONF_HIGH, "hostname Mac"
+
+    # Windows default names: DESKTOP-XXXXXXX, LAPTOP-XXXXXXX, WIN-XXXXXXXX.
+    if not host_os and re.search(r"(^|[-_.])(desktop|laptop|win)-[a-z0-9]{4,}", host):
+        host_os, host_conf, host_ev = OS_WINDOWS, CONF_HIGH, "hostname pola Windows"
+
+    # TV platforms.
+    if not host_os:
+        if _has(host, ("androidtv", "android-tv", "googletv", "google-tv",
+                       "chromecast", "bravia")):
+            host_os, host_conf, host_ev = OS_ANDROID_TV, CONF_HIGH, "hostname Android TV"
+        elif "webos" in host:
+            host_os, host_conf, host_ev = OS_WEBOS, CONF_HIGH, "hostname webOS"
+        elif "tizen" in host:
+            host_os, host_conf, host_ev = OS_TIZEN, CONF_HIGH, "hostname Tizen"
+
+    # Linux distro / server names.
+    if not host_os and _has(host, _LINUX_HOST_HINTS):
+        host_os, host_conf, host_ev = OS_LINUX, CONF_HIGH, "hostname distro Linux"
+
+    # Android makers. Checked after Apple/TV so "Samsung TV" is not a phone.
+    if not host_os and host and _has(host, _ANDROID_HOST_HINTS):
+        host_os, host_conf, host_ev = OS_ANDROID, CONF_MEDIUM, "hostname brand Android"
+    if not host_os and re.search(r"\bsm-[a-z]\d{2,4}\w*\b", host):
+        host_os, host_conf, host_ev = OS_ANDROID, CONF_MEDIUM, "hostname model Samsung"
+
+    # macOS shows up as "<Name>-MacBook.local" or a hostname containing "mac".
+    if not host_os and re.search(r"\bmac\w*-", host):
+        host_os, host_conf, host_ev = OS_MACOS, CONF_MEDIUM, "hostname pola macOS"
+
+    ttl_os = ttl_family(ttl)
+    vendor_os, vendor_ev = _vendor_os(vendor, device_type)
+
+    if host_os:
+        if ttl_os and _os_compatible(host_os, ttl_os):
+            return host_os, CONF_HIGH, f"{host_ev}; TTL {ttl} konsisten"
+        if ttl_os:
+            return host_os, CONF_MEDIUM, f"{host_ev}; TTL {ttl} tidak cocok"
+        return host_os, host_conf, host_ev
+
+    if vendor_os:
+        if ttl_os and _os_compatible(vendor_os, ttl_os):
+            return vendor_os, CONF_MEDIUM, f"{vendor_ev}; TTL {ttl} konsisten"
+        return vendor_os, CONF_LOW, vendor_ev
+
+    # A gateway is network equipment by definition; its firmware may be Linux
+    # based, but reporting "Linux" from TTL 64 alone would be a false claim.
+    if device_type == T_ROUTER:
+        return OS_NETWORK, CONF_LOW, "tipe router/gateway"
+
+    if ttl_os:
+        return ttl_os, CONF_LOW, f"TTL {ttl} saja"
+
+    return OS_UNKNOWN, "", ""
+
+
 # --------------------------------------------------------------------- vendors
 
 # Networking / router / AP vendors, matched against the OUI vendor string.
@@ -87,8 +255,12 @@ _IOT_VENDORS = (
 _PRINTER_VENDORS = ("hewlett packard", "hp inc", "brother", "canon", "epson",
                     "lexmark", "kyocera", "ricoh", "fuji film", "pantum")
 
-_TV_VENDORS = ("lg electronics", "sony", "samsung", "tcl", "hisense", "vizio",
-               "roku", "philips", "sharp", "toshiba", "xiaomi", "huawei")
+# Unambiguous TV/streaming hostnames. A bare "tv" is matched as a word so
+# "steve-pc" or "network" does not become a television.
+_TV_HOST_RE = re.compile(
+    r"(^|[-_.])(tv|smarttv|androidtv|googletv|appletv|firetv|roku)([-_.]|$)"
+    r"|bravia|webos|tizen|chromecast|fire ?stick|shield tv|living ?room"
+)
 
 # ------------------------------------------------------------- hostname brands
 
@@ -207,6 +379,10 @@ def guess_type(
         # Android never uses this shape, so it is a safe signal.
         if re.search(r"\bmac\w*-", host) or host.endswith(".local") and "mac" in host:
             return T_LAPTOP
+        # Smart TV / streaming boxes. Checked before phone brands because
+        # "Samsung-TV" and "Xiaomi-TV" contain a phone maker's name.
+        if _TV_HOST_RE.search(host):
+            return T_TV
     if ven.startswith("apple"):
         # Apple OUI alone is ambiguous (Mac, iPhone, iPad, Apple TV all share
         # it), so treat it as a generic computer unless the hostname said more.
@@ -240,8 +416,11 @@ def guess_type(
     if host and _has(host, ("printer", "scanner")):
         return T_PRINTER
 
-    # 5. TV / console (vendor-based; Apple TV was handled above).
-    if ven and _has(ven, _TV_VENDORS):
+    # 5. TV / streaming: only vendors that are unambiguous television brands.
+    #     Samsung/LG/Sony/Xiaomi/Huawei/Toshiba also make phones and PCs, so
+    #     their OUI alone must not label a device as a TV; their hostnames are
+    #     handled by the TV hints above.
+    if ven and _has(ven, ("tcl", "hisense", "vizio", "roku", "philips")):
         return T_TV
 
     # 6. Phone brands (hostname carries the brand on Android; Apple is done).
@@ -251,7 +430,13 @@ def guess_type(
         if any(re.search(p, host) for p in _PHONE_MODEL_PATTERNS):
             return T_PHONE
 
-    # 7. Generic PC/Laptop indicators.
+    # 7. Generic PC/Laptop indicators. Windows default names are explicit:
+    #    DESKTOP-XXXX is a desktop, LAPTOP-XXXX is a laptop.
+    if host:
+        if re.search(r"(^|[-_.])desktop-", host):
+            return T_DESKTOP
+        if re.search(r"(^|[-_.])laptop-", host):
+            return T_LAPTOP
     if host and _has(host, _PC_HOST_HINTS):
         return T_LAPTOP
 

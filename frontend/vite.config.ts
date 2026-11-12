@@ -26,6 +26,10 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       strictPort: true,
+      // Listen on the LAN too, not just localhost. The backend already accepts
+      // requests from any interface in production; the dev server must do the
+      // same so a phone/tablet can reach the dashboard after a network change.
+      host: true,
       // Proxy so the session cookie stays same-origin (a cross-origin cookie
       // would need SameSite=None and be rejected anyway).
       proxy: {
@@ -33,6 +37,10 @@ export default defineConfig(({ mode }) => {
         '/ws': { target: target.replace('http', 'ws'), ws: true },
       },
     },
-    build: { outDir: 'dist', sourcemap: false },
+    // Older iOS Safari (before 16.4) does not understand the modern
+    // `(width <= 40rem)` range syntax that Tailwind v4 emits by default. Keep
+    // media queries in the legacy min/max form so phones still get the mobile
+    // layout instead of the desktop grid.
+    build: { outDir: 'dist', sourcemap: false, cssTarget: 'safari15' },
   }
 })

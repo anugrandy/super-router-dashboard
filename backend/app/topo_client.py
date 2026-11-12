@@ -111,6 +111,19 @@ class TopoClient:
         self._fetched_at: float = 0.0
         self._router: ZteRouter | None = None
         self._topo_loaded = False
+        self._last_ok = 0.0
+
+    @property
+    def fresh(self) -> bool:
+        """True when the last successful client-list fetch is recent.
+
+        Liveness callers must not trust a stale snapshot: if the router is
+        unreachable, ``fetch`` returns the previous list and treating that as
+        "still online" would keep disconnected devices online indefinitely.
+        The window matches the scanner's 120s offline grace: a router that is
+        briefly slow must not drop every idle Wi-Fi client from one scan.
+        """
+        return self._last_ok > 0 and (time.time() - self._last_ok) < 120.0
 
     # ------------------------------------------------------------- internals
     def _ensure_router(self) -> ZteRouter | None:
@@ -241,6 +254,7 @@ class TopoClient:
             if merged:
                 self._clients = merged
                 self._fetched_at = time.time()
+                self._last_ok = self._fetched_at
             return self._clients
 
     def hostnames(self) -> dict[str, str]:

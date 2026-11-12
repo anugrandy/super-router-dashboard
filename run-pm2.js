@@ -30,6 +30,7 @@ import {
   FRONTEND_DIR,
   FRONTEND_DIST,
   ROOT,
+  accessUrls,
   describePythonFailure,
   isPortFree,
   npmCommand,
@@ -65,6 +66,10 @@ function parseArgs(argv) {
   let build = false
   let port = DEFAULT_PORT
   let host = DEFAULT_HOST
+  // An explicit --host or NETDASH_HOST wins. Otherwise production listens on
+  // every interface: the dashboard must keep working when the machine moves
+  // between networks and DHCP hands it a different LAN address.
+  let hostExplicit = Boolean(process.env.NETDASH_HOST)
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
@@ -91,8 +96,9 @@ function parseArgs(argv) {
       }
       case '--host': {
         const value = argv[i + 1]
-        if (!value) fail('--host butuh alamat, contoh: --host 127.0.0.1')
+        if (!value) fail('--host butuh alamat, contoh: --host 0.0.0.0')
         host = value
+        hostExplicit = true
         i += 1
         break
       }
@@ -109,6 +115,7 @@ function parseArgs(argv) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     fail(`port tidak valid: ${port}`)
   }
+  if (!hostExplicit && mode === 'production') host = '0.0.0.0'
   return { mode, build, port, host }
 }
 
@@ -122,7 +129,8 @@ function printHelp() {
       '  node run-pm2.js --prod          production: backend menyajikan frontend/dist',
       '  node run-pm2.js --build         build frontend, lalu mode production',
       '  node run-pm2.js --port 8777     ganti port backend',
-      '  node run-pm2.js --host 127.0.0.1',
+      '  node run-pm2.js --host 0.0.0.0  dengarkan semua interface (default produksi)',
+      '  node run-pm2.js --host 127.0.0.1  batasi ke mesin ini saja',
       '',
       'PM2:',
       '  pm2 start run-pm2.js --name "Dashboard-Router"',
@@ -229,7 +237,7 @@ async function main() {
   }
 
   log(`mode: ${mode}`)
-  log(`backend: http://${host}:${port}`)
+  for (const url of accessUrls(host, port)) log(`access: ${url}`)
 
   startService(
     'backend',
@@ -263,7 +271,10 @@ async function main() {
       cwd: FRONTEND_DIR,
       env: { ...process.env, NETDASH_BACKEND: String(port) },
     })
-    log('frontend: http://localhost:5173 (Vite dev server)')
+    log('frontend: Vite dev server — akses dari device lain di Wi-Fi yang sama:')
+    // Vite always binds every interface (server.host = true), regardless of the
+    // backend bind address, so these are the addresses a phone can open.
+    for (const url of accessUrls('0.0.0.0', FRONTEND_PORT)) log(`  ${url}`)
   }
 
   log('siap. Hentikan lewat PM2 untuk shutdown bersih.')

@@ -37,6 +37,8 @@ class Settings(BaseModel):
     # Per-device override: {MAC_UPPER: DEV.WIFI.APn}
     wifi_interface_map: dict[str, str] = Field(default_factory=dict)
     username: str = "admin"
+    # Optional friendly name shown in the sidebar. Empty means "use username".
+    display_name: str = ""
     # Override with env NETDASH_PASSWORD; otherwise a generated one is stored.
     password_hash: str = ""
     session_secret: str = ""

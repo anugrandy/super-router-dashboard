@@ -20,6 +20,13 @@ python-dotenv==1.2.4
 itsdangerous==2.2.0
 psutil==7.2.2
 cryptography==50.0.2
+# Publishes netdash.local over mDNS so phones can open the dashboard without
+# knowing the laptop's DHCP address. Needs UDP 5353 (unprivileged here).
+zeroconf==0.154.0
+# Provides the `speedtest` module imported by app/speedtest.py for the manual
+# Speedtest page. Imported lazily, so a missing package only breaks that page -
+# but it is still a runtime dependency and must be installed with the rest.
+speedtest-cli==2.1.3
 
 # uvicorn[standard] already installs websockets, but backend tests import it
 # directly, so keep it explicit and pinned.

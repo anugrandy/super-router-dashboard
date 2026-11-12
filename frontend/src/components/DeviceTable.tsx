@@ -1,7 +1,9 @@
-import { memo, useMemo, useState } from 'react'
+import { memo, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { TYPE_LABEL, displayName, fmtAge, type Device } from '../api'
-import { DeviceTypeChip } from './icons'
+import { useTranslation } from 'react-i18next'
+import { ChevronRight } from 'lucide-react'
+import { typeLabel, displayName, fmtAge, osLabel, type Device } from '../api'
+import { DeviceChip } from './icons'
 import { elapsedOf, useClock } from '../live'
 
 type SortKey = 'name' | 'ip' | 'vendor' | 'device_type' | 'last_seen' | 'status'
@@ -24,14 +26,15 @@ const STATUS_RANK: Record<SortKey, number> = {
  * small badge rather than the whole device table.
  */
 function KickedBadge({ started }: { started: number }) {
+  const { t } = useTranslation()
   useClock() // re-render once per second while a kick is running
   const left = Math.max(0, Math.round(elapsedOf(started)))
   return (
     <span
       className="badge badge-kicked badge-pulse mono"
-      title="Traffic sedang diblokir (blokir router + ARP spoof)"
+      title={t('devices.kickedTitle')}
     >
-      Di-kick · {left}s
+      {t('devices.kickedFor', { duration: `${left}s` })}
     </span>
   )
 }
@@ -44,20 +47,26 @@ function KickedBadge({ started }: { started: number }) {
  * stable `mac` key plus memo on the row means React can skip unchanged rows.
  */
 const DeviceRow = memo(function DeviceRow({ d }: { d: Device }) {
+  const { t } = useTranslation()
   return (
     <tr className={d.kicked != null ? 'row-kicked' : ''}>
       <td>
         <Link
           to={`/devices/${encodeURIComponent(d.mac)}`}
           className="text-muted2 hover:text-bright text-lg leading-none"
-          title="Detail device"
+          title={t('devices.detail')}
         >
           ›
         </Link>
       </td>
       <td>
         <div className="flex items-center gap-3">
-          <DeviceTypeChip type={d.device_type} />
+          <DeviceChip
+            type={d.device_type}
+            vendor={d.vendor}
+            hostname={d.hostname}
+            brandOverride={d.brand_override}
+          />
           <div className="min-w-0">
             <Link
               to={`/devices/${encodeURIComponent(d.mac)}`}
@@ -76,37 +85,121 @@ const DeviceRow = memo(function DeviceRow({ d }: { d: Device }) {
           <div className="text-[11px] text-muted2">{d.ssid_name}</div>
         )}
       </td>
-      <td className="text-muted max-w-[220px] truncate" title={d.vendor}>
+      <td className="hidden lg:table-cell text-muted max-w-[220px] truncate" title={d.vendor}>
         {d.vendor || '-'}
       </td>
       <td className="text-[13px]">
         <span className="text-muted">
-          {TYPE_LABEL[d.device_type] || d.device_type}
+          {typeLabel(d.device_type)}
         </span>
+        {osLabel(d) && (
+          <div className="text-[11px] text-muted2 mt-0.5" title={d.os_evidence}>
+            {osLabel(d)}
+            {d.os_confidence !== 'high' && (
+              <span className="ml-1 text-[10px]">
+                · {d.os_confidence === 'low'
+                  ? t('osConfidence.guess')
+                  : t('osConfidence.estimate')}
+              </span>
+            )}
+          </div>
+        )}
         {/* No hostname and a randomized MAC means the type is a guess; say so
             instead of showing a confident-looking label. */}
         {!d.type_confident && (
-          <div className="text-[10px] text-muted2 mt-0.5">perlu dicek</div>
+          <div className="text-[10px] text-muted2 mt-0.5">{t('devices.needsCheck')}</div>
         )}
       </td>
-      <td className="mono text-[11px] text-muted">{fmtAge(d.last_seen)}</td>
+      <td className="mono text-[11px] text-muted whitespace-nowrap">{fmtAge(d.last_seen)}</td>
       <td>
         <div className="flex flex-wrap gap-1.5">
           {d.kicked != null ? (
             <KickedBadge started={d.kicked} />
           ) : d.online ? (
-            <span className="badge badge-online badge-pulse">Online</span>
+            <span className="badge badge-online badge-pulse">{t('status.online')}</span>
           ) : (
-            <span className="badge badge-offline">Offline</span>
+            <span className="badge badge-offline">{t('status.offline')}</span>
           )}
-          {d.is_gateway && <span className="badge badge-gateway">Gateway</span>}
+          {d.is_self && <span className="badge badge-accent">{t('devices.self')}</span>}
+          {d.is_gateway && <span className="badge badge-gateway">{t('devices.gateway')}</span>}
         </div>
       </td>
     </tr>
   )
 })
 
-export default function DeviceTable({ devices }: { devices: Device[] }) {
+/**
+ * Phone row.
+ *
+ * The seven-column table cannot shrink to 375px without clipping, so below md
+ * the same data is a tappable two-line row: name and flags, then IP/SSID and
+ * vendor, then status and last-seen. The whole row is the link.
+ */
+const DeviceMobileRow = memo(function DeviceMobileRow({ d }: { d: Device }) {
+  const { t } = useTranslation()
+  return (
+    <li>
+      <Link
+        to={`/devices/${encodeURIComponent(d.mac)}`}
+        className="flex items-start gap-3 px-4 py-3.5 transition hover:bg-surface2 active:bg-surface2"
+      >
+        <DeviceChip
+          type={d.device_type}
+          vendor={d.vendor}
+          hostname={d.hostname}
+          brandOverride={d.brand_override}
+          size={36}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="min-w-0 truncate text-[14px] font-medium text-ink">
+              {displayName(d)}
+            </span>
+            {d.is_self && (
+              <span className="badge badge-accent shrink-0">{t('devices.self')}</span>
+            )}
+            {d.is_gateway && (
+              <span className="badge badge-gateway shrink-0">{t('devices.gateway')}</span>
+            )}
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted2">
+            <span className="mono">{d.ip || '-'}</span>
+            {d.ssid_name && <span className="truncate">{d.ssid_name}</span>}
+            {d.vendor && (
+              <span className="max-w-[140px] truncate">{d.vendor}</span>
+            )}
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {d.kicked != null ? (
+              <KickedBadge started={d.kicked} />
+            ) : d.online ? (
+              <span className="badge badge-online">{t('status.online')}</span>
+            ) : (
+              <span className="badge badge-offline">{t('status.offline')}</span>
+            )}
+            <span className="text-[11px] text-muted">
+              {typeLabel(d.device_type)}
+            </span>
+            <span className="mono ml-auto text-[11px] text-muted2">
+              {fmtAge(d.last_seen)}
+            </span>
+          </div>
+        </div>
+        <ChevronRight size={16} className="mt-1 shrink-0 text-muted2" aria-hidden="true" />
+      </Link>
+    </li>
+  )
+})
+
+export default function DeviceTable({
+  devices,
+  actions,
+}: {
+  devices: Device[]
+  /** Page-level control rendered at the end of the toolbar (e.g. Scan now). */
+  actions?: ReactNode
+}) {
+  const { t } = useTranslation()
   const [q, setQ] = useState('')
   const [filter, setFilter] = useState<'all' | 'online' | 'offline' | 'kicked'>('all')
   const [sort, setSort] = useState<SortKey>('status')
@@ -148,8 +241,9 @@ export default function DeviceTable({ devices }: { devices: Device[] }) {
     return out
   }, [devices, q, filter, sort, asc])
 
-  const head = (k: SortKey, label: string) => (
+  const head = (k: SortKey, label: string, className = '') => (
     <th
+      className={className}
       onClick={() => {
         if (sort === k) setAsc((v) => !v)
         else {
@@ -165,59 +259,82 @@ export default function DeviceTable({ devices }: { devices: Device[] }) {
 
   return (
     <div className="card overflow-visible">
-      <div className="p-4 flex flex-wrap gap-3 items-center border-b border-border">
+      <div className="card-toolbar">
         <input
-          className="input max-w-xs"
-          placeholder="Cari nama, IP, MAC, vendor…"
+          className="input w-full sm:max-w-xs"
+          placeholder={t('devices.search')}
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
-        <div className="flex gap-1 p-1 rounded-md bg-surface border border-border">
+        <div className="segmented">
           {(['all', 'online', 'offline', 'kicked'] as const).map((f) => (
             <button
               key={f}
+              aria-pressed={filter === f}
               onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-[4px] text-[12px] font-medium capitalize transition ${
-                filter === f
-                  ? 'bg-bright text-bg'
-                  : 'text-muted hover:text-ink hover:bg-surface2'
-              }`}
             >
-              {f === 'all' ? 'Semua' : f === 'kicked' ? 'Di-kick' : f}
+              {t(`devices.filters.${f}`)}
             </button>
           ))}
         </div>
-        <span className="ml-auto text-xs text-muted">
-          <span className="mono text-ink">{rows.length}</span> device
-        </span>
+        {/* Phones get a compact sort control instead of clickable table heads. */}
+        <label className="flex items-center gap-2 md:hidden">
+          <span className="text-xs text-muted2">{t('devices.sort')}</span>
+          <select
+            className="input w-auto"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as SortKey)}
+            aria-label={t('devices.sort')}
+          >
+            <option value="status">{t('devices.headers.status')}</option>
+            <option value="name">{t('devices.headers.name')}</option>
+            <option value="ip">{t('devices.headers.ip')}</option>
+            <option value="vendor">{t('devices.headers.vendor')}</option>
+            <option value="device_type">{t('devices.headers.type')}</option>
+            <option value="last_seen">{t('devices.headers.lastSeen')}</option>
+          </select>
+        </label>
+        <div className="ml-auto flex items-center gap-3">
+          <span className="hidden text-xs text-muted sm:inline">
+            {t('devices.count', { n: rows.length })}
+          </span>
+          {actions}
+        </div>
       </div>
 
-      {/* The table scrolls inside its own card rather than only with the page:
-          with a dozen or more devices the last rows otherwise sit below the
-          fold, which reads as "the table is cut off". Horizontal overflow is
-          kept for narrow viewports. */}
+      {/* Phone: a card list. The whole row is the tap target. */}
+      <ul className="divide-y divide-border md:hidden">
+        {rows.length === 0 ? (
+          <li className="px-4 py-12 text-center text-muted">{t('devices.empty')}</li>
+        ) : (
+          rows.map((d) => <DeviceMobileRow key={d.mac} d={d} />)
+        )}
+      </ul>
+
+      {/* Tablet and up: the table scrolls inside its own card rather than only
+          with the page, so the last rows are never lost below the fold. */}
       <div
-        className="overflow-auto rounded-b-[var(--radius-card)] max-h-[60vh]"
+        className="hidden max-h-[60vh] overflow-auto rounded-b-[var(--radius-card)] md:block"
         tabIndex={0}
-        aria-label="Daftar perangkat"
+        aria-label={t('devices.listAria')}
       >
         <table className="net">
           <thead>
             <tr>
               <th className="w-8"></th>
-              {head('name', 'Nama')}
-              {head('ip', 'IP / SSID')}
-              {head('vendor', 'Vendor')}
-              {head('device_type', 'Tipe')}
-              {head('last_seen', 'Terakhir terlihat')}
-              {head('status', 'Status')}
+              {head('name', t('devices.headers.name'))}
+              {head('ip', t('devices.headers.ip'))}
+              {head('vendor', t('devices.headers.vendor'), 'hidden lg:table-cell')}
+              {head('device_type', t('devices.headers.type'))}
+              {head('last_seen', t('devices.headers.lastSeen'))}
+              {head('status', t('devices.headers.status'))}
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
                 <td colSpan={7} className="text-center text-muted py-12">
-                  Belum ada device yang cocok. Ubah subnet di Settings lalu scan.
+                  {t('devices.empty')}
                 </td>
               </tr>
             )}

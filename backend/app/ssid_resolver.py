@@ -71,6 +71,18 @@ class SsidResolver:
         self._client_ap: dict[str, str] = {}
         # MAC -> {"rx_bytes": int, "tx_bytes": int, "ssid": str}
         self._usage: dict[str, dict[str, object]] = {}
+        self._last_ok = 0.0
+
+    @property
+    def fresh(self) -> bool:
+        """True when the WLAN client table was actually read recently.
+
+        ``_refresh`` keeps the previous table when the router is unreachable;
+        liveness callers must not mistake that stale copy for a live one.
+        The window matches the scanner's 120s offline grace so a transient
+        router hiccup cannot drop idle clients from a single scan.
+        """
+        return self._last_ok > 0 and (time.time() - self._last_ok) < 120.0
 
     # ------------------------------------------------------------- internals
     def _ensure_router(self) -> ZteRouter | None:
@@ -192,6 +204,7 @@ class SsidResolver:
                     "current_mode": (d.get("CurrentMode") or "").strip(),
                     "link_time": _int(d.get("LinkTime")),
                 }
+            self._last_ok = time.time()
 
         self._fetched_at = time.time()
 
@@ -251,6 +264,11 @@ class SsidResolver:
                 "ssid": str(ap.get("alias") or u.get("essid") or ""),
                 "rx_bytes": int(u.get("rx_bytes") or 0),
                 "tx_bytes": int(u.get("tx_bytes") or 0),
+                # topo_lua sometimes omits an idle phone while it is still in
+                # the WLAN client table; carrying these here keeps its name
+                # (and therefore its OS guess) from falling back to TTL-only.
+                "hostname": str(u.get("hostname") or ""),
+                "ip": str(u.get("ip") or ""),
             }
         return out
 

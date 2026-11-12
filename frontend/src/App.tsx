@@ -1,5 +1,6 @@
 import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom'
 import { Suspense, lazy, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import Layout from './components/Layout'
 import DashboardPage from './pages/Dashboard'
 import Devices from './pages/Devices'
@@ -16,15 +17,17 @@ const ConnectionPage = lazy(() => import('./pages/Connection'))
 import { AuthProvider, LiveProvider, useAuth } from './live'
 
 function RequireAuth({ children }: { children: ReactNode }) {
+  const { t } = useTranslation()
   const { username, loading } = useAuth()
   if (loading) {
-    return <div className="min-h-screen grid place-items-center text-sm text-muted2">Memuat…</div>
+    return <div className="min-h-screen grid place-items-center text-sm text-muted2">{t('app.loading')}</div>
   }
   if (!username) return <Navigate to="/login" replace />
   return <Layout>{children}</Layout>
 }
 
 export default function App() {
+  const { t } = useTranslation()
   return (
     <Router>
       <AuthProvider>
@@ -34,7 +37,7 @@ export default function App() {
           <Suspense
             fallback={
               <div className="min-h-screen grid place-items-center text-sm text-muted">
-                Memuat…
+                {t('app.loading')}
               </div>
             }
           >

@@ -24,6 +24,7 @@ import {
   FRONTEND_DIR,
   FRONTEND_PORT,
   ROOT,
+  accessUrls,
   describePythonFailure,
   isPortFree,
   isPortFreeAny,
@@ -90,9 +91,16 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2))
-const BACKEND_URL = `http://${args.host}:${args.port}`
+// Probe loopback explicitly: binding to 0.0.0.0 is not a connectable address
+// on every OS, but the service is always reachable on 127.0.0.1.
+const BACKEND_URL = `http://127.0.0.1:${args.port}`
 const FRONTEND_URL = `http://localhost:${FRONTEND_PORT}`
 const DASHBOARD_URL = `${FRONTEND_URL}/dashboard`
+
+/** LAN URLs only, i.e. what another device on the same Wi-Fi can open. */
+function lanUrls(port) {
+  return accessUrls(args.host, port).filter((url) => !/\/\/(localhost|127\.0\.0\.1)[:/]/.test(url))
+}
 
 const useColor = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR
 const ansi = (code) => (useColor ? `\x1b[${code}m` : '')
@@ -119,7 +127,8 @@ Usage:
   anrouter                 buka menu (backend + Vite dev server)
   anrouter --doctor        cek Python/venv, dependency, dan port
   anrouter --port 8777     ganti port backend
-  anrouter --host 127.0.0.1
+  anrouter --host 0.0.0.0  dengarkan semua interface (default, bisa diakses LAN)
+  anrouter --host 127.0.0.1  batasi ke mesin ini saja
   anrouter --version
   anrouter --help
 
@@ -132,12 +141,29 @@ Menu:
 `)
 }
 
+function printAccess() {
+  const lan = lanUrls(FRONTEND_PORT)
+  console.log('')
+  console.log(`${BOLD}Akses dari device lain di jaringan yang sama:${RESET}`)
+  if (lan.length === 0) {
+    console.log(
+      `  ${YELLOW}(tidak ada alamat LAN terdeteksi — pastikan laptop terhubung ke Wi-Fi)${RESET}`,
+    )
+  } else {
+    for (const url of lan) console.log(`  ${GREEN}${url}${RESET}`)
+    console.log(`  ${DIM}Buka alamat itu dari HP/tablet yang memakai Wi-Fi yang sama.${RESET}`)
+  }
+  console.log(`${DIM}Di laptop ini : ${FRONTEND_URL}${RESET}`)
+  console.log(`${DIM}Backend       : ${BACKEND_URL} (bind ${args.host}:${args.port})${RESET}`)
+}
+
 function banner() {
   console.log('')
   console.log(`${BOLD}AN Telemetry${RESET} ${DIM}v${VERSION}${RESET}`)
   console.log(`${DIM}Server ${RESET} ${FRONTEND_URL}`)
   console.log(`${DIM}Backend${RESET} ${BACKEND_URL}`)
   console.log(`${DIM}Python ${RESET} ${python?.command || '(belum dicek)'}`)
+  printAccess()
   console.log('')
 }
 
@@ -424,6 +450,8 @@ async function doctor() {
   console.log(
     `  production   : ${fs.existsSync(path.join(FRONTEND_DIR, 'dist', 'index.html')) ? 'frontend/dist exists' : 'frontend/dist missing (npm run build)'}`,
   )
+  const lan = lanUrls(FRONTEND_PORT)
+  console.log(`  LAN URLs     : ${lan.length ? lan.join(', ') : '(none detected)'}`)
 }
 
 async function menu() {

@@ -14,6 +14,11 @@ $ErrorActionPreference = "Continue"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
 
+# Listen on every interface by default, matching run.sh. This keeps the
+# dashboard reachable after a DHCP change or from a phone on the same Wi-Fi.
+# Set NETDASH_HOST=127.0.0.1 to restrict it to this machine.
+$BindHost = if ($env:NETDASH_HOST) { $env:NETDASH_HOST } else { "0.0.0.0" }
+
 $Python = Join-Path $Root ".venv\Scripts\python.exe"
 if (-not (Test-Path $Python)) {
     Write-Host "run.ps1: $Python tidak ditemukan. Buat venv root dulu:" -ForegroundColor Red
@@ -21,7 +26,7 @@ if (-not (Test-Path $Python)) {
     Write-Host "  .venv\Scripts\python.exe -m pip install -r backend\requirements.txt"
     exit 1
 }
-& $Python -c "import fastapi, uvicorn, cryptography, scapy, sqlmodel, httpx, psutil, dotenv, itsdangerous, websockets" 2>$null
+& $Python -c "import fastapi, uvicorn, cryptography, scapy, sqlmodel, httpx, psutil, dotenv, itsdangerous, speedtest, websockets" 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Host "run.ps1: dependency Python belum lengkap di .venv" -ForegroundColor Red
     Write-Host "  .venv\Scripts\python.exe -m pip install -r backend\requirements.txt"
@@ -79,14 +84,14 @@ foreach ($k in @("NETDASH_ROUTER_USER", "NETDASH_ROUTER_PASS", "NETDASH_ROUTER_U
 }
 
 Write-Host ""
-Write-Host "=== starting backend on 127.0.0.1:$Port ===" -ForegroundColor Cyan
+Write-Host "=== starting backend on ${BindHost}:$Port ===" -ForegroundColor Cyan
 $env:NETDASH_PORT = "$Port"
 Set-Location backend
 
 # Launch detached. Start-Process on cmd.exe (not -NoNewWindow) returns
 # immediately; launching python.exe directly with -NoNewWindow would keep this
 # script's process alive and the script would never return.
-$cmd = "cd /d `"$Root\backend`" && `"$Root\.venv\Scripts\python.exe`" -m uvicorn app.main:app --host 127.0.0.1 --port $Port > server.log 2>&1"
+$cmd = "cd /d `"$Root\backend`" && `"$Root\.venv\Scripts\python.exe`" -m uvicorn app.main:app --host $BindHost --port $Port > server.log 2>&1"
 Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $cmd -WindowStyle Minimized
 
 Start-Sleep -Seconds 8
@@ -117,3 +122,7 @@ Write-Host ""
 Write-Host "=== next: start the frontend ===" -ForegroundColor Cyan
 Write-Host "  cd frontend && npm run dev"
 Write-Host "  then open http://localhost:5173   (localhost, not 127.0.0.1)"
+Write-Host "  or from another device on the same Wi-Fi:"
+Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object { $_.IPAddress -notlike "127.*" -and $_.IPAddress -notlike "169.254.*" } |
+    ForEach-Object { Write-Host ("    http://{0}:5173" -f $_.IPAddress) }

@@ -93,7 +93,8 @@ check_type("nas hostname", "my-nas", "", False, want=T_SERVER)
 
 print("\n--- pc / desktop ---")
 check_type("UNKNOWN-PC + intel", "UNKNOWN-PC", "Intel Corporate", True, want=T_LAPTOP)
-check_type("desktop hostname", "desktop-01", "", False, want=T_LAPTOP)
+check_type("desktop hostname", "desktop-01", "", False, want=T_DESKTOP)
+check_type("laptop hostname", "laptop-01", "", False, want=T_LAPTOP)
 check_type("wired intel nic", "", "Intel Corporate", False, want=T_DESKTOP)
 
 print("\n--- tv / printer / iot ---")

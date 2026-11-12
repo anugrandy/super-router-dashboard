@@ -9,6 +9,10 @@
 set -uo pipefail
 
 PORT="${1:-8777}"
+# Listen on every interface by default so a changed LAN address (or a phone on
+# the same Wi-Fi) can still reach the dashboard. Set NETDASH_HOST=127.0.0.1 to
+# keep it loopback-only.
+HOST="${NETDASH_HOST:-0.0.0.0}"
 ROOT="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT" || exit 1
 
@@ -28,7 +32,7 @@ if [ -z "$PYTHON" ]; then
     echo "run.sh: python3 tidak ditemukan di PATH." >&2
     exit 1
 fi
-if ! "$PYTHON" -c 'import fastapi, uvicorn, cryptography, scapy, sqlmodel, httpx, psutil, dotenv, itsdangerous, websockets' >/dev/null 2>&1; then
+if ! "$PYTHON" -c 'import fastapi, uvicorn, cryptography, scapy, sqlmodel, httpx, psutil, dotenv, itsdangerous, speedtest, websockets' >/dev/null 2>&1; then
     echo "run.sh: dependency Python belum lengkap untuk $PYTHON" >&2
     echo "  $PYTHON -m pip install -r backend/requirements.txt" >&2
     exit 1
@@ -156,10 +160,10 @@ for k in NETDASH_ROUTER_USER NETDASH_ROUTER_PASS NETDASH_ROUTER_URL; do
 done
 
 echo
-echo "=== starting backend on 127.0.0.1:$PORT ==="
+echo "=== starting backend on $HOST:$PORT ==="
 cd backend || exit 1
 NETDASH_PORT="$PORT" "$PYTHON" -m uvicorn app.main:app \
-    --host 127.0.0.1 --port "$PORT" >server.log 2>&1 &
+    --host "$HOST" --port "$PORT" >server.log 2>&1 &
 BACKEND_PID=$!
 echo "$BACKEND_PID" >server.pid
 sleep 6
@@ -185,6 +189,12 @@ echo
 echo "=== now start the frontend against this port ==="
 echo "  cd frontend && NETDASH_BACKEND=$PORT npm run dev"
 echo "  then open http://localhost:5173"
+for ip in $(hostname -I 2>/dev/null || true); do
+    case "$ip" in
+        *:*) ;;
+        *) echo "  or from another device: http://$ip:5173" ;;
+    esac
+done
 
 if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
     echo

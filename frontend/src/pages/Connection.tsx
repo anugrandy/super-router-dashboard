@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Trash2 } from 'lucide-react'
 import { api, fmtTime, type WanEvent, type WanStatus } from '../api'
 import { PageHeader } from '../components/Layout'
 import { IconPlug, IconUnplug, UiRefresh } from '../components/icons'
 import { useWanEvent } from '../components/Toasts'
+import { DeleteLogButton, LogDeleteDialog } from '../components/LogDelete'
+import { useLive } from '../live'
 
 function Row({
   label,
@@ -67,9 +71,13 @@ function StatusPill({
  * pollers for one number.
  */
 export default function ConnectionPage() {
+  const { t } = useTranslation()
+  const { devices, logsChangedAt } = useLive()
   const [data, setData] = useState<{ status: WanStatus; history: WanEvent[]; poll_seconds: number } | null>(null)
   const [err, setErr] = useState('')
+  const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const wanEvent = useWanEvent()
 
   const load = useCallback(async () => {
@@ -77,9 +85,9 @@ export default function ConnectionPage() {
       setData(await api.wan())
       setErr('')
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Gagal memuat status koneksi')
+      setErr(e instanceof Error ? e.message : t('connection.loadError'))
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()
@@ -89,6 +97,10 @@ export default function ConnectionPage() {
   useEffect(() => {
     if (wanEvent) void load()
   }, [wanEvent, load])
+
+  useEffect(() => {
+    if (logsChangedAt) void load()
+  }, [logsChangedAt, load])
 
   const refresh = async () => {
     setBusy(true)
@@ -100,154 +112,184 @@ export default function ConnectionPage() {
   const up = s?.ipv4_status === 'connected'
   const v6 = s?.ipv6_status === 'connected'
 
+  const statusText = (value: string) =>
+    value === 'connected'
+      ? t('status.connected')
+      : value === 'disconnected'
+        ? t('status.disconnected')
+        : t('common.unknown')
+
   return (
     <div>
       <PageHeader
-        title="Status Koneksi Internet"
+        title={t('connection.title')}
         subtitle={
           s?.available
-            ? `${s.connection_name} · ${s.connection_type} · poll tiap ${data?.poll_seconds ?? 120}s`
+            ? t('connection.subtitle', {
+                name: s.connection_name,
+                type: s.connection_type,
+                seconds: data?.poll_seconds ?? 120,
+              })
             : undefined
-        }
-        actions={
-          <button onClick={refresh} disabled={busy} className="btn-ghost">
-            <UiRefresh className={busy ? 'animate-spin' : ''} />
-            Muat ulang
-          </button>
         }
       />
 
-      {err && (
-        <div className="card px-4 py-3 mb-4 border-red/40 text-sm text-red">
-          {err}
-        </div>
-      )}
+      {msg && <div className="notice notice-success mb-5">{msg}</div>}
+      {err && <div className="notice notice-danger mb-5">{err}</div>}
 
       {!s ? (
-        <div className="card p-10 text-center text-[13px] text-muted">Memuat…</div>
+        <p className="py-10 text-center text-[13px] text-muted">
+          {t('connection.loading')}
+        </p>
       ) : !s.available ? (
-        <div className="card p-6 border-red/40">
-          <div className="flex items-center gap-2 text-red font-semibold text-[14px]">
+        <div className="max-w-2xl py-4">
+          <div className="flex items-center gap-2 text-[14px] font-semibold text-red">
             <IconUnplug size={16} />
-            Router tidak bisa dihubungi
+            {t('connection.routerDown')}
           </div>
-          <p className="text-[12px] text-muted mt-2 leading-5">
-            {s.error || 'Tidak ada respons dari router.'}
+          <p className="mt-2 text-[12px] leading-5 text-muted">
+            {s.error || t('connection.routerDownBody')}
           </p>
-          <p className="text-[12px] text-muted mt-2 leading-5">
-            Ini <strong className="text-ink">bukan</strong> berarti internet
-            mati — router bisa saja sedang restart. Status internet terakhir yang
-            diketahui masih dipakai sampai router merespons lagi.
+          <p className="mt-2 text-[12px] leading-5 text-muted">
+            {t('connection.routerDownNote')}
           </p>
         </div>
       ) : (
         <>
-          {/* Main status card */}
-          <div
-            className="card p-5 mb-4 flex items-center gap-4 flex-wrap"
-            style={{
-              borderColor: up ? 'rgba(34,197,94,0.35)' : 'rgba(239,68,68,0.4)',
-            }}
-          >
-            <div
-              className="w-14 h-14 rounded-md border flex items-center justify-center shrink-0"
-              style={{
-                color: up ? 'var(--color-green)' : 'var(--color-red)',
-                borderColor: up ? 'rgba(34,197,94,0.35)' : 'rgba(239,68,68,0.4)',
-              }}
+          {/* Main status: a plain summary row, not a boxed hero card. */}
+          <div className="mb-8 flex flex-wrap items-center gap-4">
+            <span
+              className="shrink-0"
+              style={{ color: up ? 'var(--color-green)' : 'var(--color-red)' }}
             >
-              {up ? <IconPlug size={26} /> : <IconUnplug size={26} />}
-            </div>
+              {up ? <IconPlug size={28} /> : <IconUnplug size={28} />}
+            </span>
             <div className="min-w-0 flex-1">
               <div
                 className="text-[20px] font-semibold leading-tight tracking-tight"
                 style={{ color: up ? 'var(--color-green)' : 'var(--color-red)' }}
               >
-                {up ? 'Internet Tersambung' : 'Internet Terputus'}
+                {up ? t('connection.online') : t('connection.offline')}
               </div>
-              <div className="text-[12px] text-muted mt-1">
+              <div className="mt-1 text-[12px] text-muted">
                 {s.connection_name} · {s.connection_type || '—'}
                 {up
-                  ? ` · sudah online ${s.online_human}`
+                  ? t('connection.onlineFor', { duration: s.online_human })
                   : s.disconnect_reason
                     ? ` · ${s.disconnect_reason}`
                     : ''}
               </div>
             </div>
-            <div className="flex flex-col gap-1.5 shrink-0">
-              <StatusPill status={s.ipv4_status} label={`IPv4 ${up ? ' aktif' : ' mati'}`} />
+            <div className="flex shrink-0 flex-col gap-1.5">
+              <StatusPill
+                status={s.ipv4_status}
+                label={up ? t('connection.ipv4Active') : t('connection.ipv4Down')}
+              />
               {s.ipv6_status !== 'unknown' && (
-                <StatusPill status={s.ipv6_status} label={`IPv6 ${v6 ? ' aktif' : ' mati'}`} />
+                <StatusPill
+                  status={s.ipv6_status}
+                  label={v6 ? t('connection.ipv6Active') : t('connection.ipv6Down')}
+                />
               )}
             </div>
+            {/* Refresh belongs to the status it refreshes, not the page header. */}
+            <button
+              onClick={refresh}
+              disabled={busy}
+              className="btn shrink-0 self-start"
+              title={t('connection.refresh')}
+            >
+              <UiRefresh className={busy ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">{t('connection.refresh')}</span>
+            </button>
           </div>
 
-          {/* Outage reason gets its own callout when present */}
+          {/* Outage reason keeps a red rule instead of a filled card. */}
           {s.disconnect_reason && (
-            <div className="card px-4 py-3 mb-4 border-red/40">
-              <div className="text-[12px] font-semibold text-red">Penyebab putusnya koneksi</div>
-              <div className="mono text-[12px] text-ink mt-1">{s.disconnect_reason}</div>
-              <p className="text-[11px] text-muted mt-1.5 leading-4">
-                Kode ini berasal dari router (ISP). Wi-Fi lokal di rumah tetap
-                aktif, jadi perangkat yang tersambung ke access point tidak ikut
-                terputus.
-              </p>
+            <div className="notice notice-danger mb-8">
+              <div className="min-w-0">
+                <div className="text-[12px] font-semibold">
+                  {t('connection.disconnectTitle')}
+                </div>
+                <div className="mono mt-1 text-[12px] text-ink">{s.disconnect_reason}</div>
+                <p className="mt-1.5 text-[11px] leading-4 text-muted">
+                  {t('connection.disconnectNote')}
+                </p>
+              </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-            <div className="card p-5">
-              <h3 className="text-[13px] font-semibold text-ink mb-1">IPv4</h3>
-              <Row label="Status" value={s.ipv4_status} mono={false} />
-              <Row label="IP WAN" value={s.ipv4_address} />
-              <Row label="Gateway" value={s.gateway} />
-              <Row label="Subnet mask" value={s.subnet_mask} />
-              <Row label="Online duration" value={s.online_human} mono={false} />
-              <Row label="DNS" value={s.dns.join(', ') || '—'} />
-            </div>
+          <div className="mb-10 grid grid-cols-1 gap-x-10 gap-y-10 lg:grid-cols-2">
+            <section>
+              <h3 className="mb-1 text-[13px] font-semibold text-ink">{t('connection.ipv4')}</h3>
+              <Row label={t('connection.status')} value={statusText(s.ipv4_status)} mono={false} />
+              <Row label={t('connection.wanIp')} value={s.ipv4_address} />
+              <Row label={t('connection.gateway')} value={s.gateway} />
+              <Row label={t('connection.subnetMask')} value={s.subnet_mask} />
+              <Row label={t('connection.onlineDuration')} value={s.online_human} mono={false} />
+              <Row label={t('connection.dns')} value={s.dns.join(', ') || '—'} />
+            </section>
 
-            <div className="card p-5">
-              <h3 className="text-[13px] font-semibold text-ink mb-1">
-                IPv6 {s.ipv6_status !== 'unknown' && <StatusPill status={s.ipv6_status} label={v6 ? 'aktif' : 'mati'} />}
+            <section>
+              <h3 className="mb-1 text-[13px] font-semibold text-ink">
+                {t('connection.ipv6')}{' '}
+                {s.ipv6_status !== 'unknown' && (
+                  <StatusPill
+                    status={s.ipv6_status}
+                    label={v6 ? t('status.active') : t('status.inactive')}
+                  />
+                )}
               </h3>
               {s.ipv6_status === 'unknown' ? (
                 <p className="text-[12px] text-muted py-2">
-                  ISP belum mengaktifkan IPv6 pada koneksi ini.
+                  {t('connection.noIpv6')}
                 </p>
               ) : (
                 <>
-                  <Row label="Alamat (prefix)" value={s.ipv6_address} />
-                  <Row label="Gateway" value={s.ipv6_gateway} />
-                  <Row label="Online duration" value={s.ipv6_online_human} mono={false} />
-                  <Row label="DNS" value={s.ipv6_dns.join(', ') || '—'} />
+                  <Row label={t('connection.addressPrefix')} value={s.ipv6_address} />
+                  <Row label={t('connection.gateway')} value={s.ipv6_gateway} />
+                  <Row
+                    label={t('connection.onlineDuration')}
+                    value={s.ipv6_online_human}
+                    mono={false}
+                  />
+                  <Row label={t('connection.dns')} value={s.ipv6_dns.join(', ') || '—'} />
                 </>
               )}
-            </div>
+            </section>
 
-            <div className="card p-5">
-              <h3 className="text-[13px] font-semibold text-ink mb-1">Koneksi</h3>
-              <Row label="Nama" value={s.connection_name} mono={false} />
-              <Row label="Tipe" value={s.connection_type} mono={false} />
-              <Row label="Autentikasi" value={s.auth_type || '—'} mono={false} />
+            <section>
+              <h3 className="mb-1 text-[13px] font-semibold text-ink">{t('connection.connections')}</h3>
+              <Row label={t('connection.name')} value={s.connection_name} mono={false} />
+              <Row label={t('connection.connectionType')} value={s.connection_type} mono={false} />
+              <Row label={t('connection.auth')} value={s.auth_type || '—'} mono={false} />
               <Row label="VLAN" value={s.vlan_id} />
               <Row label="MTU" value={s.mtu} />
-              <Row label="NAT" value={s.is_nat ? 'aktif' : 'nonaktif'} mono={false} />
-              <Row label="Default gateway" value={s.is_default_gateway ? 'ya' : 'tidak'} mono={false} />
-            </div>
+              <Row
+                label="NAT"
+                value={s.is_nat ? t('connection.natOn') : t('connection.natOff')}
+                mono={false}
+              />
+              <Row
+                label={t('connection.defaultGateway')}
+                value={s.is_default_gateway ? t('connection.yes') : t('connection.no')}
+                mono={false}
+              />
+            </section>
 
             {/* Every connection the router reports, so a rename is visible */}
-            <div className="card p-5">
-              <h3 className="text-[13px] font-semibold text-ink mb-1">
-                Semua koneksi di router
+            <section>
+              <h3 className="mb-1 text-[13px] font-semibold text-ink">
+                {t('connection.allConnections')}
               </h3>
               <ul className="text-[12px]">
                 {s.connections.map((c) => (
                   <li
                     key={c.name}
-                    className="flex items-center gap-2 py-1.5 border-b border-border last:border-0"
+                    className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border py-2 last:border-0"
                   >
                     <span
-                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
                       style={{
                         background:
                           c.ipv4_status === 'connected'
@@ -255,74 +297,117 @@ export default function ConnectionPage() {
                             : 'var(--color-muted2)',
                       }}
                     />
-                    <span className="text-ink w-24 shrink-0">{c.name}</span>
-                    <span className="text-muted w-16 shrink-0">{c.type || '—'}</span>
-                    <span className="mono text-muted truncate">
+                    <span className="shrink-0 text-ink">{c.name}</span>
+                    <span className="shrink-0 text-muted">{c.type || '—'}</span>
+                    <span className="mono min-w-0 flex-1 truncate text-muted">
                       {c.ipv4_address && c.ipv4_address !== '0.0.0.0' ? c.ipv4_address : '—'}
                     </span>
-                    {c.is_default_gateway && <span className="badge badge-accent shrink-0">default</span>}
+                    {c.is_default_gateway && (
+                      <span className="badge badge-accent shrink-0">
+                        {t('connection.default')}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
-            </div>
+            </section>
           </div>
 
           {/* Outage history */}
-          <div className="card overflow-hidden">
-            <div className="px-5 py-4 border-b border-border">
-              <h3 className="text-[13px] font-semibold text-ink">
-                Riwayat putus-nyambung
-              </h3>
-              <p className="text-[11px] text-muted mt-0.5">
-                Dicatat otomatis setiap kali status berubah
-              </p>
+          <section className="mt-10">
+            <div className="mb-1 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-[13px] font-semibold text-ink">
+                  {t('connection.history')}
+                </h3>
+                <p className="mt-0.5 text-[11px] text-muted">
+                  {t('connection.historySub')}
+                </p>
+              </div>
+              {data && data.history.length > 0 && (
+                <button
+                  className="btn btn-sm btn-danger-quiet"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Trash2 size={14} />
+                  {t('connection.deleteAll')}
+                </button>
+              )}
             </div>
             {!data || data.history.length === 0 ? (
-              <p className="p-8 text-center text-[13px] text-muted">
-                Belum ada riwayat. Status saat ini dicatat sebagai titik awal.
+              <p className="py-8 text-center text-[13px] text-muted">
+                {t('connection.noHistory')}
               </p>
             ) : (
-              <ul>
+              <ul className="border-t border-border">
                 {data.history.map((e) => {
                   const on = e.kind === 'connected'
                   return (
                     <li
                       key={e.id}
-                      className="flex items-center gap-3 px-5 py-3 border-b border-border last:border-0 hover:bg-surface2 transition"
+                      className="flex items-start gap-3 border-b border-border py-3 transition last:border-0 hover:bg-surface2"
                     >
                       <span
-                        className="shrink-0"
+                        className="mt-0.5 shrink-0"
                         style={{ color: on ? 'var(--color-green)' : 'var(--color-red)' }}
                       >
                         {on ? <IconPlug size={14} /> : <IconUnplug size={14} />}
                       </span>
-                      <span
-                        className={`badge shrink-0 ${on ? 'badge-online' : 'badge-offline'}`}
-                      >
-                        {on ? 'connected' : 'disconnected'}
-                      </span>
-                      <span className="mono text-[11px] text-muted hidden sm:inline shrink-0">
-                        {e.ipv4_address || '—'}
-                      </span>
-                      {e.reason && (
-                        <span className="text-[11px] text-red/80 truncate flex-1" title={e.reason}>
-                          {e.reason}
-                        </span>
-                      )}
-                      <span
-                        className="mono text-[11px] text-muted2 shrink-0 ml-auto"
-                        title={fmtTime(e.at)}
-                      >
-                        {fmtTime(e.at)}
-                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span
+                            className={`badge shrink-0 ${on ? 'badge-online' : 'badge-offline'}`}
+                          >
+                            {on ? t('status.connected') : t('status.disconnected')}
+                          </span>
+                          <span className="mono text-[11px] text-muted">
+                            {e.ipv4_address || '—'}
+                          </span>
+                          <span
+                            className="mono ml-auto text-[11px] text-muted2"
+                            title={fmtTime(e.at)}
+                          >
+                            {fmtTime(e.at)}
+                          </span>
+                        </div>
+                        {e.reason && (
+                          <div
+                            className="mt-0.5 break-words text-[11px] text-red/80"
+                            title={e.reason}
+                          >
+                            {e.reason}
+                          </div>
+                        )}
+                      </div>
+                      <DeleteLogButton
+                        scope="wan_events"
+                        id={e.id}
+                        onDeleted={() => {
+                          setMsg(t('connection.deleted', { n: 1 }))
+                          void load()
+                        }}
+                        onError={setErr}
+                      />
                     </li>
                   )
                 })}
               </ul>
             )}
-          </div>
+          </section>
         </>
       )}
+
+      <LogDeleteDialog
+        open={deleteOpen}
+        initialScope="wan_events"
+        devices={devices}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={(r) => {
+          setMsg(r.total ? t('connection.deleted', { n: r.total }) : t('logs.nothing'))
+          void load()
+        }}
+        onError={setErr}
+      />
     </div>
   )
 }

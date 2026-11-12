@@ -10,8 +10,9 @@
  */
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import type { Transition, WanEvent } from '../api'
-import { DeviceTypeChip, IconClose, IconPlug, IconUnplug } from './icons'
+import { DeviceChip, IconClose, IconPlug, IconUnplug } from './icons'
 
 type Listener = (t: Transition[]) => void
 
@@ -77,9 +78,10 @@ export function useTransitions() {
   return items
 }
 
-function Toast({ t, onDone }: { t: Transition; onDone: () => void }) {
-  const online = t.kind !== 'offline'
-  const fresh = t.kind === 'new'
+function Toast({ t: transition, onDone }: { t: Transition; onDone: () => void }) {
+  const { t } = useTranslation()
+  const online = transition.kind !== 'offline'
+  const fresh = transition.kind === 'new'
 
   useEffect(() => {
     // A newly-seen device stays up a little longer so it registers.
@@ -90,9 +92,9 @@ function Toast({ t, onDone }: { t: Transition; onDone: () => void }) {
 
   return (
     <Link
-      to={`/devices/${encodeURIComponent(t.mac)}`}
+      to={`/devices/${encodeURIComponent(transition.mac)}`}
       onClick={onDone}
-      className="pointer-events-auto flex items-start gap-3 rounded-lg border bg-surface px-4 py-3 transition hover:bg-surface2"
+      className="pointer-events-auto flex items-start gap-3 rounded-lg glass-panel px-4 py-3 transition hover:-translate-y-0.5"
       style={{
         borderColor: fresh
           ? 'var(--color-border-strong)'
@@ -101,7 +103,13 @@ function Toast({ t, onDone }: { t: Transition; onDone: () => void }) {
             : 'rgba(239,68,68,0.35)',
       }}
     >
-      <DeviceTypeChip type={t.device_type} size={30} />
+      <DeviceChip
+        type={transition.device_type}
+        vendor={transition.vendor}
+        hostname={transition.hostname}
+        brandOverride={transition.brand_override}
+        size={30}
+      />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span
@@ -111,16 +119,20 @@ function Toast({ t, onDone }: { t: Transition; onDone: () => void }) {
             {online ? <IconPlug size={13} /> : <IconUnplug size={13} />}
           </span>
           <span className="text-[13px] font-medium text-ink truncate">
-            {t.name}
+            {transition.name}
           </span>
-          {fresh && <span className="badge badge-warn shrink-0">Baru!</span>}
+          {fresh && <span className="badge badge-warn shrink-0">{t('toasts.newBadge')}</span>}
         </div>
         <div className="text-[11px] text-muted mt-0.5 truncate">
           {fresh
-            ? `baru pertama kali terlihat${t.ip ? ` di ${t.ip}` : ''}`
+            ? t('toasts.firstSeen', {
+                ip: transition.ip ? t('toasts.firstSeenIp', { ip: transition.ip }) : '',
+              })
             : online
-              ? `terhubung${t.ip ? ` di ${t.ip}` : ''}`
-              : 'terputus'}
+              ? t('toasts.connected', {
+                  ip: transition.ip ? t('toasts.connectedIp', { ip: transition.ip }) : '',
+                })
+              : t('toasts.disconnected')}
         </div>
       </div>
     </Link>
@@ -134,6 +146,7 @@ function Toast({ t, onDone }: { t: Transition; onDone: () => void }) {
  * burst of transitions cannot flood the viewport.
  */
 export default function Toasts() {
+  const { t } = useTranslation()
   const items = useTransitions()
   const wan = useWanEvent()
   const [, force] = useState(0)
@@ -148,14 +161,14 @@ export default function Toasts() {
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 w-80 max-w-[calc(100vw-2rem)]">
+    <div className="fixed left-4 right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] sm:left-auto sm:right-5 sm:bottom-5 sm:w-80 z-50 flex flex-col gap-2">
       {wan && <WanAlert w={wan} />}
       {shown.map((t) => (
         <Toast key={t.mac} t={t} onDone={() => dismiss(t.mac)} />
       ))}
       {items.length > shown.length && (
         <div className="text-[11px] text-muted2 text-right">
-          +{items.length - shown.length} lainnya
+          {t('toasts.more', { n: items.length - shown.length })}
         </div>
       )}
     </div>
@@ -170,6 +183,7 @@ export default function Toasts() {
  * that quietly faded after five seconds would be the wrong behaviour here.
  */
 function WanAlert({ w }: { w: WanEvent }) {
+  const { t } = useTranslation()
   const down = w.kind !== 'connected'
   const [open, setOpen] = useState(true)
   useEffect(() => setOpen(true), [w])
@@ -179,7 +193,7 @@ function WanAlert({ w }: { w: WanEvent }) {
   return (
     <div
       role="alert"
-      className="rounded-lg border bg-surface px-4 py-3.5"
+      className="rounded-lg glass-panel px-4 py-3.5"
       style={{
         borderColor: down ? 'rgba(239,68,68,0.45)' : 'rgba(34,197,94,0.4)',
       }}
@@ -196,14 +210,16 @@ function WanAlert({ w }: { w: WanEvent }) {
             className="text-[14px] font-semibold"
             style={{ color: down ? 'var(--color-red)' : 'var(--color-green)' }}
           >
-            {down ? 'Internet Terputus!' : 'Internet Sudah Pulang'}
+            {down ? t('toasts.wanDown') : t('toasts.wanUp')}
           </div>
           <div className="text-[11px] text-muted mt-0.5 leading-4">
             {down
               ? w.reason
-                ? `Penyebab: ${humanReason(w.reason)}`
-                : 'Koneksi ke ISP terputus. Wi-Fi lokal masih aktif.'
-              : `Koneksi kembali normal${w.ipv4_address ? ` · ${w.ipv4_address}` : ''}`}
+                ? t('toasts.wanReason', { reason: humanReason(w.reason) })
+                : t('toasts.wanDownBody')
+              : t('toasts.wanUpBody', {
+                  ip: w.ipv4_address ? t('toasts.wanUpIp', { ip: w.ipv4_address }) : '',
+                })}
           </div>
           <Link
             to="/connection"
@@ -211,12 +227,12 @@ function WanAlert({ w }: { w: WanEvent }) {
             className="inline-block mt-2 text-[11px] font-medium underline underline-offset-2 hover:opacity-80"
             style={{ color: down ? 'var(--color-red)' : 'var(--color-green)' }}
           >
-            Lihat detail koneksi
+            {t('toasts.wanDetail')}
           </Link>
         </div>
         <button
           onClick={() => setOpen(false)}
-          aria-label="Tutup peringatan"
+          aria-label={t('toasts.closeAlert')}
           className="shrink-0 text-muted hover:text-ink transition -mt-0.5 -mr-1 p-1"
         >
           <IconClose size={13} />

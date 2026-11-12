@@ -9,14 +9,22 @@ Run: .venv/Scripts/python.exe backend/test_transitions.py
 from __future__ import annotations
 
 import asyncio
+import os
 import sys
+import tempfile
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
+
+# Never touch the live dashboard database from a test run. Without this, the
+# mocked devices below become real rows (and fake transitions) in
+# backend/data/netdash.db.
+os.environ["NETDASH_DATA"] = tempfile.mkdtemp(prefix="netdash-test-")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from app import scanner  # noqa: E402
-from app.db import Device, get_session, init_db  # noqa: E402
+from app.db import Device, get_session, init_db, utcnow  # noqa: E402
 from sqlmodel import select  # noqa: E402
 
 PASS = FAIL = 0
@@ -135,12 +143,28 @@ with get_session() as s:
     d = s.exec(select(Device).where(Device.mac == TEST_MAC)).first()
     if d is not None:
         d.online = True
+        d.missed_scans = 0
+        # Pretend the device was last seen before the grace window: the test
+        # is about a real disappearance, not a single transient miss.
+        d.last_seen = utcnow() - timedelta(
+            seconds=scanner.OFFLINE_GRACE_SECONDS + 5
+        )
         s.add(d)
         s.commit()
 
+# One lost ARP reply is normal for a Wi-Fi client in power save, so the first
+# consecutive miss is debounced and must not emit an offline transition.
 devices, trans, hub = asyncio.run(_scan([]))
 check(
-    "disappearance is 'offline'",
+    "first miss is debounced",
+    [x["kind"] for x in trans if x["mac"] == TEST_MAC],
+    [],
+)
+
+# The second consecutive miss is a real disappearance.
+devices, trans, hub = asyncio.run(_scan([]))
+check(
+    "second consecutive miss is 'offline'",
     [x["kind"] for x in trans if x["mac"] == TEST_MAC],
     ["offline"],
 )

@@ -1,10 +1,11 @@
 import { useLive } from '../live'
 import { PageHeader } from '../components/Layout'
 import TopologyMap from '../components/TopologyMap'
-import { api } from '../api'
+import { api, currentLocale, type Device } from '../api'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { RouterHealth } from '../api'
-import { Cpu, MemoryStick, Timer } from 'lucide-react'
+import KpiStrip from '../components/Kpi'
 
 /**
  * Topology page: the graph plus router health.
@@ -14,16 +15,36 @@ import { Cpu, MemoryStick, Timer } from 'lucide-react'
  * router, and nothing re-renders on a timer.
  */
 export default function TopologyPage() {
-  const { devices } = useLive()
+  const { t, i18n } = useTranslation()
+  const {
+    devices: liveDevices,
+    isViewingActive,
+    viewProfileId,
+    lastEventAt,
+  } = useLive()
   const [health, setHealth] = useState<RouterHealth | null>(null)
+  const [historicDevices, setHistoricDevices] = useState<Device[]>([])
+
+  // Historical profiles are served by REST because the socket only carries the
+  // network the laptop is actually on.
+  useEffect(() => {
+    if (isViewingActive) return
+    api
+      .devices(viewProfileId)
+      .then((r) => setHistoricDevices(r.devices))
+      .catch(() => setHistoricDevices([]))
+  }, [isViewingActive, viewProfileId, lastEventAt])
+
+  const devices = isViewingActive ? liveDevices : historicDevices
 
   const loadHealth = useCallback(async () => {
+    if (!isViewingActive) return
     try {
       setHealth(await api.routerHealth())
     } catch {
       setHealth(null)
     }
-  }, [])
+  }, [isViewingActive])
 
   useEffect(() => {
     void loadHealth()
@@ -42,13 +63,13 @@ export default function TopologyPage() {
   const bootedAt = useMemo(() => {
     if (!health?.available || !health.uptime_seconds) return ''
     const booted = new Date(Date.now() - health.uptime_seconds * 1000)
-    return booted.toLocaleString('id-ID', {
+    return booted.toLocaleString(currentLocale(), {
       day: '2-digit',
       month: 'short',
       hour: '2-digit',
       minute: '2-digit',
     })
-  }, [health])
+  }, [health, i18n.language])
 
   const gateway = devices.find((d) => d.is_gateway)
   // Fall back to the .1 address when nothing has been flagged as the gateway.
@@ -57,145 +78,71 @@ export default function TopologyPage() {
   return (
     <div>
       <PageHeader
-        title="Topologi"
-        subtitle={`${devices.length} perangkat terdaftar`}
+        title={t('topology.title')}
+        subtitle={t('topology.subtitle', { n: devices.length })}
       />
 
-      <div className="grid gap-4 sm:grid-cols-3 mb-4">
-        <HealthCard
-          icon={<Timer size={16} />}
-          label="Router Uptime"
-          value={health?.available ? health.uptime_human : '—'}
-          // Boot time is derived from the uptime the router reports; it fills
-          // the card's second line with something actually useful rather than
-          // leaving it empty next to the CPU per-core detail.
-          detail={bootedAt ? `nyala sejak ${bootedAt}` : undefined}
-          hint={health?.available ? health.uptime_human : undefined}
-          tint={{ bg: 'var(--color-surface2)', fg: 'var(--color-muted)' }}
-        />
-        <HealthCard
-          icon={<Cpu size={16} />}
-          label="CPU rata-rata"
-          // The four cores were rendered inline ("3% / 2% / 0% / 0%") and wrapped
-          // to two lines, crowding out the card. The average is the number worth
-          // showing at a glance; the per-core split is detail, not headline.
-          value={
-            cpuAvg != null ? cpuAvg.toFixed(cpuAvg < 10 ? 1 : 0) : '—'
-          }
-          unit={cpuAvg != null ? '%' : undefined}
-          detail={
-            cores.length ? `core: ${cores.map((c) => `${c}%`).join(' / ')}` : undefined
-          }
-          hint={
-            cores.length
-              ? `${cores.length} core — ${cores.map((c) => `${c}%`).join(' / ')}`
-              : undefined
-          }
-          tint={{ bg: 'var(--color-surface2)', fg: 'var(--color-muted)' }}
-        />
-        <HealthCard
-          icon={<MemoryStick size={16} />}
-          label="Memory"
-          value={health?.available && health.mem_pct != null ? String(health.mem_pct) : '—'}
-          unit={health?.available && health.mem_pct != null ? '%' : undefined}
-          hint={
-            health?.available && health.mem_pct != null
-              ? `Memory terpakai ${health.mem_pct}%`
-              : undefined
-          }
-          tint={{ bg: 'var(--color-surface2)', fg: 'var(--color-muted)' }}
-        />
-      </div>
+      {isViewingActive && (
+        <>
+          <KpiStrip
+            className="mb-4"
+            mobileCols={1}
+            items={[
+              {
+                label: t('topology.routerUptime'),
+                value: health?.available ? health.uptime_human : '—',
+                sub: bootedAt ? t('topology.bootedAt', { time: bootedAt }) : undefined,
+              },
+              {
+                label: t('topology.cpuAverage'),
+                value:
+                  cpuAvg != null
+                    ? `${cpuAvg.toFixed(cpuAvg < 10 ? 1 : 0)}%`
+                    : '—',
+                sub: cores.length
+                  ? t('topology.coreDetail', {
+                      values: cores.map((c) => `${c}%`).join(' / '),
+                    })
+                  : undefined,
+              },
+              {
+                label: t('topology.memory'),
+                value:
+                  health?.available && health.mem_pct != null
+                    ? `${health.mem_pct}%`
+                    : '—',
+                sub:
+                  health?.available && health.mem_pct != null
+                    ? t('topology.memoryUsed', { pct: health.mem_pct })
+                    : undefined,
+              },
+            ]}
+          />
 
-      {health && !health.available && health.error && (
-        <div className="card px-4 py-3 mb-4 border-red/40 text-[13px] text-red">
-          Data kesehatan router tidak bisa dibaca: {health.error}
-        </div>
-      )}
+          {health && !health.available && health.error && (
+            <div className="notice notice-danger mb-4">
+              {t('topology.healthError', { error: health.error })}
+            </div>
+          )}
 
-      {health?.available && (
-        <p className="mono text-[11px] text-muted2 mb-3 leading-relaxed">
-          {health.model} · firmware {health.software_version} · serial{' '}
-          {health.serial_number} · CPU 4 core ditampilkan terpisah, refresh tiap
-          3 menit
-        </p>
+          {health?.available && (
+            <p className="mono mb-5 text-[11px] leading-relaxed text-muted2">
+              {t('topology.firmwareLine', {
+                model: health.model,
+                firmware: health.software_version,
+                serial: health.serial_number,
+                n: health.cpu_cores?.length ?? 0,
+              })}
+            </p>
+          )}
+        </>
       )}
 
       <TopologyMap
         devices={devices}
-        routerName={gateway ? 'Router' : 'Gateway'}
+        routerName={gateway ? t('topology.router') : t('topology.gateway')}
         gatewayMac={gatewayMac}
       />
-    </div>
-  )
-}
-
-/**
- * Font size by value length.
- *
- * The same 1.5rem that reads well for a bare number ("69") overflows a card
- * when the value is a duration string ("1 hari 10j 7m"). Stepping down by
- * length keeps all three cards consistent without measuring the DOM.
- */
-function valueSize(v: string): string {
-  if (v.length <= 4) return 'text-[1.5rem]'
-  if (v.length <= 7) return 'text-[1.4rem]'
-  if (v.length <= 11) return 'text-[1.3rem]'
-  return 'text-[1.25rem]'
-}
-
-function HealthCard({
-  icon,
-  label,
-  value,
-  unit,
-  detail,
-  hint,
-  tint,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: string
-  /** Shown next to the number, e.g. "%" or "Mbps". */
-  unit?: string
-  /** Small secondary line under the number (per-core breakdown, etc.). */
-  detail?: string
-  /** Full text for the tooltip, so nothing is lost on narrow cards. */
-  hint?: string
-  tint: { bg: string; fg: string }
-}) {
-  return (
-    <div className="card card-hover p-5 min-h-[100px] flex flex-col" title={hint}>
-      <div className="flex items-start justify-between gap-3 flex-1">
-        <div className="min-w-0">
-          <div className="stat-label">{label}</div>
-          {/* One number per card, on one line: the value is the only thing that
-              needs to be large. Anything per-item goes in `detail` below. */}
-          <div className="mt-1.5 flex items-baseline gap-1 whitespace-nowrap">
-            <span
-              className={`stat-value stat-value-text ${valueSize(value)}`}
-            >
-              {value}
-            </span>
-            {unit && (
-              <span className="text-[12px] text-muted shrink-0">{unit}</span>
-            )}
-          </div>
-          {/* Reserved line so all three cards keep the same height whether or
-              not they have a detail row. The height must cover the text's full
-              line box (10px x 1.55 = 15.5px), not just the glyph height, or the
-              descenders are clipped against the card's bottom edge. */}
-          <div className="mono text-[10px] leading-4 text-muted2 mt-2 h-4 truncate">
-            {detail}
-          </div>
-        </div>
-        <span
-          className="inline-flex items-center justify-center w-8 h-8 rounded-md shrink-0 border border-border"
-          style={{ background: tint.bg, color: tint.fg }}
-        >
-          {icon}
-        </span>
-      </div>
     </div>
   )
 }

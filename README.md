@@ -42,7 +42,7 @@ Access Control router atau ARP spoofing.
 | Node.js | **20 atau lebih baru** |
 | npm | 10+ (ikut Node.js) |
 | OS | Windows 10/11, Linux, macOS |
-| Hak akses | `root`/Administrator hanya untuk fitur kick (raw socket) |
+| Hak akses | `root`/Administrator **atau** `CAP_NET_RAW` untuk ARP scan (deteksi device) dan kick |
 | Npcap (Windows) | Wajib untuk ARP kick; centang **WinPcap API-compatible Mode** |
 | libpcap (Linux/macOS) | Untuk fitur scapy tertentu; ARP scan tetap bisa memakai raw socket |
 
@@ -59,12 +59,29 @@ dan menolak start bila ada dependency yang tidak bisa di-import.
 ```bash
 sudo apt update
 sudo apt install -y python3-venv libpcap-dev net-tools iproute2
-# Opsional, agar kick tidak perlu sudo terus-menerus:
-sudo setcap cap_net_raw+ep "$(readlink -f .venv/bin/python)"
 ```
 
+`setcap` **wajib** kalau backend tidak dijalankan sebagai root. Tanpa
+`CAP_NET_RAW`, ARP scan gagal (`PermissionError: [Errno 1] Operation not
+permitted`) dan backend diam-diam jatuh ke `arp -an`; cache itu biasanya hanya
+berisi gateway, sehingga semua device lain tampil **offline**. Terapkan
+capability ke interpreter yang benar-benar dipakai launcher/PM2 (root `.venv`):
+
+```bash
+# resolve symlink dulu: capability menempel ke binary asli, bukan symlink venv
+sudo setcap cap_net_raw+ep "$(readlink -f .venv/bin/python)"
+getcap "$(readlink -f .venv/bin/python)"   # harus menampilkan cap_net_raw=ep
+```
+
+Capability ini berlaku untuk semua proses yang memakai binary Python tersebut
+(di banyak distro: `/usr/bin/python3.x`) dan bisa hilang saat paket Python
+di-upgrade — jalankan ulang `setcap` setelah upgrade. Kalau lebih memilih tanpa
+capability, jalankan backend sebagai root (`sudo`); PM2 sebagai root memakai
+daemon PM2 terpisah, jadi jangan mencampur PM2 user dan root.
+
 `net-tools` menyediakan command `arp` yang dipakai sebagai fallback saat raw
-socket tidak tersedia. `iproute2` menyediakan `ss`/`ip` untuk diagnostik.
+socket tidak tersedia. Fallback ini **bukan pengganti** scan: hasilnya tidak
+lengkap. `iproute2` menyediakan `ss`/`ip` untuk diagnostik.
 
 **Windows:** install [Npcap](https://npcap.com) dengan opsi **WinPcap API-compatible
 Mode**, lalu jalankan terminal sebagai **Administrator** untuk fitur kick.
@@ -242,8 +259,22 @@ pm2 startup          # ikuti instruksi yang dicetak PM2
 ```
 
 Mode production hanya menjalankan **satu** proses backend; FastAPI menyajikan
-`frontend/dist` langsung di `http://127.0.0.1:8777` tanpa Vite. Ini menghemat
-RAM/CPU dibanding menjalankan Vite di server.
+`frontend/dist` langsung di port **8777** tanpa Vite. Ini menghemat RAM/CPU
+dibanding menjalankan Vite di server.
+
+Di production, `run-pm2.js` default-nya bind ke **semua interface**
+(`0.0.0.0`), bukan hanya loopback. Jadi saat laptop berpindah jaringan dan IP
+LAN berubah (rumah ↔ kampus), dashboard tetap bisa dibuka lewat
+`http://localhost:8777` di mesin itu atau `http://<IP-LAN-sekarang>:8777` dari
+perangkat lain. URL yang sedang aktif dicetak saat start:
+
+```
+[run-pm2] access: http://localhost:8777
+[run-pm2] access: http://192.168.1.4:8777
+```
+
+Kalau memang ingin membatasi ke mesin itu saja, pakai
+`--host 127.0.0.1` atau `NETDASH_HOST=127.0.0.1`.
 
 Alternatif: build otomatis saat PM2 start:
 
@@ -305,6 +336,44 @@ ss -ltnp | grep 8777
 
 ---
 
+## Akses dari HP (LAN) dan `netdash.local`
+
+Di production, `run-pm2.js` membuat backend listen di `0.0.0.0:8777` dan backend
+yang sama menyajikan hasil build frontend. Jadi HP di Wi-Fi yang sama bisa
+langsung membuka:
+
+```
+http://<IP-laptop>:8777          # mis. http://192.168.1.7:8777
+http://netdash.local:8777        # alamat tetap, tidak perlu hafal IP
+```
+
+`netdash.local` dipublikasikan oleh backend sendiri lewat mDNS (paket
+`zeroconf`), tanpa `avahi-daemon` dan tanpa root. Alamatnya mengikuti interface
+default dan dipublikasikan ulang otomatis kalau DHCP memberi IP baru, jadi nama
+ini tetap dipakai setelah laptop reconnect.
+
+Supaya bisa diakses dari perangkat lain, firewall harus mengizinkan port aplikasi
+dan mDNS:
+
+```bash
+sudo ufw allow from 192.168.1.0/24 to any port 8777 proto tcp
+sudo ufw allow 5353/udp
+```
+
+Catatan:
+
+- HP memakai resolver mDNS-nya sendiri, jadi `netdash.local` langsung jalan.
+  Di laptop Linux, `netdash.local` butuh resolver mDNS seperti `avahi-daemon`;
+  karena backend sudah memegang UDP 5353, mengaktifkan avahi saat dashboard
+  berjalan bisa bentrok. Di mesin itu cukup pakai `localhost`.
+- Kalau masih tidak terbuka, matikan **AP/client isolation** di router dan
+  pastikan HP tidak memakai VPN atau SSID guest.
+- Jangan port-forward `8777` ke internet: dashboard ini bisa scan dan kick
+  perangkat. Untuk akses dari luar rumah, pakai Tailscale atau tunnel dengan
+  autentikasi.
+
+---
+
 ## Environment variables
 
 ### `backend/.env`
@@ -316,7 +385,7 @@ ss -ltnp | grep 8777
 | `NETDASH_ROUTER_URL` | tidak | default `http://192.168.1.1` |
 | `NETDASH_PASSWORD` | tidak | password login dashboard; default `netdash` |
 | `NETDASH_PORT` | tidak | port backend; default `8777` |
-| `NETDASH_HOST` | tidak | host bind backend; default `127.0.0.1` |
+| `NETDASH_HOST` | tidak | host bind backend; default production `0.0.0.0`, development `127.0.0.1` |
 | `NETDASH_DATA` | tidak | direktori SQLite/config; default `backend/data` |
 
 Contoh lengkap: [`backend/.env.example`](backend/.env.example).
@@ -429,6 +498,36 @@ Lihat `pm2 logs Dashboard-Router`. Penyebab umum:
   `npm run build` atau pakai `--build`.
 - Interpreter yang dipilih bukan venv yang benar → set `NETDASH_PYTHON` lalu
   `pm2 restart ... --update-env`.
+
+### Semua device tampil offline (hanya router yang online)
+
+Gejala: dashboard menampilkan router online, device lain offline padahal
+terhubung; `arp -an` di host hanya berisi `192.168.1.1`. Ini hampir selalu
+berarti ARP scan tidak punya `CAP_NET_RAW`, bukan device yang benar-benar mati.
+
+Cek dari terminal, pakai interpreter yang sama dengan backend:
+
+```bash
+.venv/bin/python -c 'import socket; socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(3)); print("raw socket OK")'
+# PermissionError: [Errno 1] Operation not permitted  -> capability belum ada
+
+getcap "$(readlink -f .venv/bin/python)"   # harus: cap_net_raw=ep
+```
+
+Perbaikan:
+
+```bash
+sudo setcap cap_net_raw+ep "$(readlink -f .venv/bin/python)"
+pm2 restart Dashboard-Router --update-env     # atau restart `anrouter`/run.sh
+```
+
+Tanpa PM2, pastikan proses benar-benar berhenti lalu start ulang; capability
+hanya dibaca saat proses dibuat. Kalau memakai `sudo`, jalankan seluruh
+backend sebagai root — cukup `sudo` pada satu perintah scan tidak membantu
+karena scan berjalan di dalam proses server.
+
+Log startup sekarang menampilkan `raw socket (ARP)` dan peringatan
+`ARP scan unavailable (...)` saat fallback dipakai.
 
 ### Kick tidak berfungsi
 
@@ -762,6 +861,29 @@ Yang dilakukan aplikasi:
 
 Kalau device Apple kamu muncul sebagai "perlu dicek", isi manual sekali di
 Device Detail — itu satu-satunya cara di firmware ini.
+
+## Speedtest — akurasi
+
+Backend memakai **Speedtest CLI resmi dari Ookla** bila tersedia. Ini penting:
+hasilnya memakai server, protokol, dan probing latensi yang sama dengan tes
+browser. Kalau klien resmi tidak ada, backend memilih server dari API
+speedtest.net yang sekarang (bukan feed XML lama yang di banyak ISP hanya
+berisi server negara tetangga) lalu tetap mengukur throughput dengan
+`speedtest-cli`.
+
+Klien resmi dideteksi otomatis di `NETDASH_SPEEDTEST_BIN`, `PATH`,
+`~/.local/bin/speedtest`, dan `bin/speedtest` di dalam repo. Cara pasang:
+
+```bash
+# Linux x86_64 (contoh; ganti versi/arsitektur sesuai mesin)
+curl -fsSL https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-x86_64.tgz \
+  | tar xz -C ~/.local/bin speedtest
+speedtest --version   # harus menampilkan "Speedtest by Ookla"
+```
+
+Kalau binary disimpan di lokasi lain, set `NETDASH_SPEEDTEST_BIN` ke path
+lengkapnya sebelum menjalankan backend. Tanpa klien resmi, halaman tetap bisa
+dipakai tetapi hasilnya diberi label **speedtest-cli (perkiraan)**.
 
 ## Bandwidth per device — tidak tersedia
 

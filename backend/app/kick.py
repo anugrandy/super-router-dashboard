@@ -30,6 +30,7 @@ from sqlmodel import select
 
 from .config import config_store
 from .db import Device, DeviceApSeen, KickLog, get_session, utcnow
+from . import profiles
 from .net import KickTarget, SpoofEngine, normalize_mac
 from .router_client import RouterError, ZteRouter
 from .ssid_map import interface_for_mac
@@ -87,12 +88,14 @@ def _set(mac: str, started: float | None) -> None:
 
 
 def _update_log(mac: str, **fields) -> None:
+    pid = profiles.active_id()
     with get_session() as s:
-        row = s.exec(
-            select(KickLog)
-            .where(KickLog.mac == normalize_mac(mac), KickLog.active == True)  # noqa: E712
-            .order_by(KickLog.started_at.desc())
-        ).first()
+        stmt = select(KickLog).where(
+            KickLog.mac == normalize_mac(mac), KickLog.active == True  # noqa: E712
+        )
+        if pid is not None:
+            stmt = stmt.where(KickLog.network_profile_id == pid)
+        row = s.exec(stmt.order_by(KickLog.started_at.desc())).first()
         if row is None:
             return
         for k, v in fields.items():
@@ -129,11 +132,15 @@ def target_interfaces(mac: str) -> tuple[list[str], str, str]:
         log.warning("fresh SSID lookup failed for %s: %s", mac, e)
 
     history: list[str] = []
+    pid = profiles.active_id()
     try:
         with get_session() as s:
-            rows = s.exec(
-                select(DeviceApSeen).where(DeviceApSeen.mac == normalize_mac(mac))
-            ).all()
+            stmt = select(DeviceApSeen).where(
+                DeviceApSeen.mac == normalize_mac(mac)
+            )
+            if pid is not None:
+                stmt = stmt.where(DeviceApSeen.network_profile_id == pid)
+            rows = s.exec(stmt).all()
             # Most recently seen first: the current AP is the likeliest one the
             # device will try first.
             history = [
@@ -285,8 +292,12 @@ def _gateway_ip(subnet: str) -> str:
 
 
 def _lookup_gateway_mac(cfg) -> str:
+    pid = profiles.active_id()
     with get_session() as s:
-        dev = s.exec(select(Device).where(Device.ip == _gateway_ip(cfg.subnet))).first()
+        stmt = select(Device).where(Device.ip == _gateway_ip(cfg.subnet))
+        if pid is not None:
+            stmt = stmt.where(Device.network_profile_id == pid)
+        dev = s.exec(stmt).first()
         if dev:
             return dev.mac
     return ""
@@ -310,8 +321,10 @@ def start_kick(mac: str, ip: str = "", actor: str = "", reason: str = "") -> dic
     name = _log_name(mac, ip)
 
     # Log row first so both halves can attach their outcome to it.
+    pid = profiles.active_id()
     with get_session() as s:
         row = KickLog(
+            network_profile_id=pid,
             mac=mac,
             ip=ip,
             actor=actor,
@@ -382,12 +395,14 @@ def stop_kick(mac: str, actor: str = "") -> dict:
     """
     mac = normalize_mac(mac)
     saved_ids = ""
+    pid = profiles.active_id()
     with get_session() as s:
-        row = s.exec(
-            select(KickLog)
-            .where(KickLog.mac == mac, KickLog.active == True)  # noqa: E712
-            .order_by(KickLog.started_at.desc())
-        ).first()
+        stmt = select(KickLog).where(
+            KickLog.mac == mac, KickLog.active == True  # noqa: E712
+        )
+        if pid is not None:
+            stmt = stmt.where(KickLog.network_profile_id == pid)
+        row = s.exec(stmt.order_by(KickLog.started_at.desc())).first()
         if row is not None:
             saved_ids = row.router_inst_ids or row.router_inst_id or ""
 
@@ -439,18 +454,26 @@ def stop_kick(mac: str, actor: str = "") -> dict:
 
 
 def _log_name(mac: str, ip: str) -> str:
+    pid = profiles.active_id()
     with get_session() as s:
-        dev = s.exec(select(Device).where(Device.mac == mac)).first()
+        stmt = select(Device).where(Device.mac == mac)
+        if pid is not None:
+            stmt = stmt.where(Device.network_profile_id == pid)
+        dev = s.exec(stmt).first()
         if dev and dev.nickname:
             return dev.nickname[:15]
     return (ip or mac)[-15:]
 
 
-def _close_logs(mac: str) -> None:
+def _close_logs(mac: str, any_profile: bool = False) -> None:
+    pid = None if any_profile else profiles.active_id()
     with get_session() as s:
-        rows = s.exec(
-            select(KickLog).where(KickLog.mac == mac, KickLog.active == True)  # noqa: E712
-        ).all()
+        stmt = select(KickLog).where(
+            KickLog.mac == mac, KickLog.active == True  # noqa: E712
+        )
+        if pid is not None:
+            stmt = stmt.where(KickLog.network_profile_id == pid)
+        rows = s.exec(stmt).all()
         for row in rows:
             row.active = False
             row.arp_active = False
@@ -526,4 +549,7 @@ def stop_all() -> None:
                 r.unblock(mac, inst or None)
         except Exception as e:  # noqa: BLE001
             log.warning("shutdown unblock gagal untuk %s: %s", mac, e)
+        # Mark the log closed even though the active profile may already have
+        # moved on; otherwise the old row stays "active" forever.
+        _close_logs(mac, any_profile=True)
         _set(mac, None)
